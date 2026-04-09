@@ -1,39 +1,51 @@
 // CONFIGURACIÓN DE LA URL DE APPS SCRIPT
 // REEMPLAZAR ESTA CADENA CON LA URL PUBLICADA COMO APLICACIÓN WEB DE APPS SCRIPT
-const API_URL = "https://script.google.com/macros/s/AKfycbx0skme6OwQVHscFkuF_08I99CLKV46XhMnwNXEyqO3YZxFzMt3pfDCNezNXfRzPa2i8Q/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbw8_2OAZsBaQ2uACL01U6CNUMTMqcP-fwK0CwhCQdhGNeoOEnupO7vHTQWRPea4j8_R/exec";
 
 const tenants = {
     'instituto_empresa': {
         name: 'Instituto de la Empresa',
         logo: 'https://cdn.bitrix24.es/b15495391/landing/7a8/7a88860fb02485c824de9be805faee6d/ie_1x.png',
-        primary: '#e67e22', // Naranja suave premium
-        primaryLight: '#f39c12',
-        primaryDark: '#d35400',
-        hasCategories: false
+        primary: '#df6621',
+        primaryLight: '#f18244',
+        primaryDark: '#8a3307',
+        secondary: '#182a4d', /* Las rayas de los margenes en azul marino */
+        hasCategories: false,
+        heroTitle: 'Reserva tu Sesión de Coaching',
+        heroSubtitle: 'Acompañamiento personalizado para estudiantes del Instituto de la Empresa'
     },
     'blackwell': {
         name: 'Blackwell Global University',
         logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR5_cFkfTk5W0cZjL7FMg-Cm-sm_INdEjYtFQ&s',
-        primary: '#34495e', // Negro/Azul oscuro suave 
-        primaryLight: '#7f8c8d',
-        primaryDark: '#2c3e50',
-        hasCategories: true
+        primary: '#003c8f', /* Azul encendido y oscuro del logo */
+        primaryLight: '#2c64b5',
+        primaryDark: '#061d4a',
+        secondary: '#003c8f',
+        hasCategories: true,
+        heroTitle: 'Sesiones de Coaching Académico',
+        heroSubtitle: 'Potenciando tu formación de postgrado en Blackwell Global University'
     },
     'neumann': {
         name: 'Jhonn Vonn Neumann',
         logo: 'https://i.postimg.cc/DfgKYQTK/LOGO-NEUMANN.png',
-        primary: '#8e44ad', // Morado suave
-        primaryLight: '#9b59b6',
-        primaryDark: '#732d91',
-        hasCategories: false
+        primary: '#00559c', /* Base de azul cruzado al morado para degradado */
+        primaryLight: '#3a87c9',
+        primaryDark: '#7b2282',
+        secondary: '#33b2e3', /* Rayas secundarias celestes en base al logo */
+        hasCategories: false,
+        heroTitle: 'Agenda tu Sesión de Coaching',
+        heroSubtitle: 'Espacio profesional para tu desarrollo académico en Neumann'
     },
     'ua_chile': {
         name: 'Universidad Autónoma',
         logo: 'https://upload.wikimedia.org/wikipedia/commons/a/a4/Universidad-autonoma-de-chile.png',
-        primary: '#e74c3c', // Rojo suave
-        primaryLight: '#f1948a',
-        primaryDark: '#c0392b',
-        hasCategories: true
+        primary: '#3a3a3a', /* Degradado de grises oscuros */
+        primaryLight: '#555555',
+        primaryDark: '#1a1a1a',
+        secondary: '#e3000f', /* Rayas separadoras en rojo institucional */
+        hasCategories: true,
+        heroTitle: 'Reserva tu Sesión de Coaching',
+        heroSubtitle: 'Acompañamiento personalizado para estudiantes de postgrado de la Universidad Autónoma.'
     }
 };
 
@@ -58,7 +70,8 @@ function initTenant() {
 
     // Set UI
     document.getElementById('tenant-logo').src = currentTenant.logo;
-    document.getElementById('tenant-title').textContent = currentTenant.name;
+    document.getElementById('tenant-title').textContent = currentTenant.heroTitle || currentTenant.name;
+    document.getElementById('tenant-subtitle').textContent = currentTenant.heroSubtitle || 'Sistema de Reserva de Citas Profesionales';
     document.getElementById('tenant-input').value = currentTenant.name;
 
     // Configure CSS variables
@@ -66,6 +79,8 @@ function initTenant() {
     root.style.setProperty('--primary', currentTenant.primary);
     root.style.setProperty('--primary-light', currentTenant.primaryLight);
     root.style.setProperty('--primary-dark', currentTenant.primaryDark);
+    root.style.setProperty('--secondary', currentTenant.secondary || currentTenant.primary);
+    if (currentTenant.bannerBg) root.style.setProperty('--banner-bg', currentTenant.bannerBg);
 
     // Configure program selectors based on tenant rules
     if (currentTenant.hasCategories) {
@@ -187,7 +202,7 @@ function handleEmailInput(e) {
     const list = document.getElementById('autocomplete-list');
     list.innerHTML = '';
 
-    if (val.length < 4) {
+    if (val.length < 6) {
         list.classList.add('hidden');
         document.getElementById('email-hint').textContent = "Escriba su correo para cargar su perfil.";
         return;
@@ -434,8 +449,6 @@ function renderTimeSlots(dateStr) {
 
         container.appendChild(div);
     });
-
-    lockForm();
 }
 
 function selectDateTime(dateStr, slot) {

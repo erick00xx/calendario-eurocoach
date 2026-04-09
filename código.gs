@@ -104,11 +104,16 @@ function searchUserProfile(email) {
 // ----------------------------------------------------
 function getLatestProfiles() {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
-  const data = sheet.getDataRange().getValues();
+  const lastRow = sheet.getLastRow();
   const profilesMap = {};
   
+  if (lastRow <= 1) return [];
+  
+  // Get data without header
+  const data = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
+  
   // Buscar desde el final hacia arriba
-  for (let i = data.length - 1; i > 0; i--) {
+  for (let i = data.length - 1; i >= 0; i--) {
     const rowEmail = data[i][3] ? data[i][3].toString().trim().toLowerCase() : '';
     if (rowEmail && !profilesMap[rowEmail]) {
       // Limpiar telefono quitando el apostrofe si lo tiene

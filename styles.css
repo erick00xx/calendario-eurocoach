@@ -22,19 +22,25 @@
     padding: 0;
 }
 
+html {
+    scroll-behavior: smooth;
+}
+
 body {
     font-family: 'Inter', sans-serif;
     background-color: var(--bg-color);
     color: var(--text-main);
     line-height: 1.6;
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     position: relative;
     overflow-x: hidden;
 }
 
 /* Dynamic background blocks */
 .background-decor {
-    position: absolute;
+    position: fixed;
     top: -10%;
     left: -5%;
     width: 50vw;
@@ -45,10 +51,11 @@ body {
     z-index: -1;
     border-radius: 50%;
     animation: float 15s ease-in-out infinite;
+    pointer-events: none;
 }
 
 .background-decor-2 {
-    position: absolute;
+    position: fixed;
     bottom: -10%;
     right: -5%;
     width: 40vw;
@@ -59,6 +66,7 @@ body {
     z-index: -1;
     border-radius: 50%;
     animation: float 20s ease-in-out infinite reverse;
+    pointer-events: none;
 }
 
 @keyframes float {
@@ -75,46 +83,71 @@ body {
     }
 }
 
-.app-container {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 2rem;
-    min-height: 100vh;
+/* Top Navbar */
+.top-navbar {
     display: flex;
-    flex-direction: column;
-}
-
-.app-header {
-    display: flex;
+    justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
-    gap: 1.5rem;
+    padding: 10px 4%;
+    background-color: var(--white);
+    border-bottom: 8px solid var(--primary);
 }
 
-.logo-container {
-    background: var(--white);
-    padding: 10px;
-    border-radius: 16px;
-    box-shadow: var(--shadow-sm);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.logo {
-    height: 70px;
+.logo-area img {
+    height: 50px;
     object-fit: contain;
 }
 
-.header-text h1 {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--primary-dark);
+.coach-info {
+    text-align: right;
+    line-height: 1.2;
 }
 
-.header-text p {
+.coach-info strong {
+    display: block;
+    color: var(--primary-dark);
+    font-size: 0.95rem;
+    letter-spacing: 0.5px;
+}
+
+.coach-role {
+    font-size: 0.75rem;
     color: var(--text-muted);
-    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Full Width Hero Banner */
+.hero-banner {
+    background: var(--banner-bg, linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%));
+    color: var(--white);
+    text-align: center;
+    padding: 60px 20px 140px 20px;
+    margin-bottom: -100px;
+    /* Pulls app-container up without breaking flex bottom calculation */
+}
+
+.hero-banner h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.hero-banner p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    font-weight: 300;
+}
+
+.app-container {
+    flex: 1 0 auto;
+    width: 100%;
+    max-width: 750px;
+    /* Reduced width to make it taller and center tightly */
+    margin: 0 auto;
+    padding: 0 1rem 3rem 1rem;
+    position: relative;
+    z-index: 10;
 }
 
 /* Layout Grid */
@@ -122,12 +155,11 @@ body {
     display: flex;
     justify-content: center;
     gap: 2rem;
-    flex: 1;
+    width: 100%;
 }
 
 .main-content.center-calendar .calendar-section {
     width: 100%;
-    max-width: 800px;
 }
 
 @media(max-width: 850px) {
@@ -143,9 +175,10 @@ body {
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
     border-radius: var(--border-radius);
-    padding: 2rem;
+    padding: 2.5rem;
     box-shadow: var(--shadow-md);
     transition: var(--transition);
+    min-height: 450px;
 }
 
 .glass-card:hover {
@@ -176,12 +209,17 @@ body {
     overflow-x: auto;
     padding-bottom: 1rem;
     margin-bottom: 1rem;
-    scrollbar-width: none;
-    /* Hide scrollbar Firefox */
+    scrollbar-width: thin;
     cursor: grab;
     touch-action: pan-x;
-    scroll-behavior: smooth;
+    scroll-behavior: auto;
+    /* better for drag manually */
     -webkit-overflow-scrolling: touch;
+
+    /* Disable selection while dragging */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
 }
 
 .date-tabs:active {
@@ -189,8 +227,12 @@ body {
 }
 
 .date-tabs::-webkit-scrollbar {
-    display: none;
-    /* Hide scrollbar Webkit */
+    height: 6px;
+}
+
+.date-tabs::-webkit-scrollbar-thumb {
+    background-color: var(--primary-light);
+    border-radius: 4px;
 }
 
 .date-tab {
@@ -201,7 +243,8 @@ body {
     cursor: pointer;
     text-align: center;
     transition: var(--transition);
-    min-width: 80px;
+    min-width: 95px;
+    /* Widened tabs */
     background-color: var(--white);
 }
 
@@ -231,11 +274,17 @@ body {
 
 .time-slots {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    /* Increased min-width forces fewer columns */
     gap: 0.75rem;
-    max-height: 350px;
+    max-height: 500px;
     overflow-y: auto;
     padding-right: 5px;
+
+    /* Disable selection */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
 }
 
 .time-slots::-webkit-scrollbar {
@@ -500,10 +549,17 @@ textarea {
 
 .app-footer {
     text-align: center;
-    padding: 2rem 0;
-    color: var(--text-muted);
+    padding: 2.5rem 1rem;
+    background: var(--banner-bg, var(--primary-dark));
+    color: var(--white);
     font-size: 0.85rem;
     margin-top: auto;
+    /* Solid flex anchor */
+}
+
+.app-footer p {
+    opacity: 0.8;
+    margin: 0;
 }
 
 .hidden {
