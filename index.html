@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EUROCOACH - Reserva de Citas</title>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- intl-tel-input -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/css/intlTelInput.css" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <!-- Loader that shows initially until data is ready -->
+    <div id="loader" class="loader-overlay active">
+        <div class="spinner"></div>
+        <p>Cargando disponibilidad...</p>
+    </div>
+
+    <div class="background-decor"></div>
+    <div class="background-decor-2"></div>
+
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo-container">
+                <img id="tenant-logo" src="" alt="Logo" class="logo">
+            </div>
+            <div class="header-text">
+                <h1 id="tenant-title">EUROCOACH</h1>
+                <p>Sistema de Reserva de Citas Profesionales</p>
+            </div>
+        </header>
+
+        <main class="main-content center-calendar">
+
+            <!-- Calendar Section -->
+            <section class="calendar-section glass-card">
+                <div class="section-title">
+                    <h2>1. Selecciona tu Cita</h2>
+                    <p>Días y horas disponibles para coaching</p>
+                </div>
+
+                <div class="calendar-wrapper">
+                    <div class="date-tabs" id="date-tabs">
+                        <!-- Dynamically populated dates -->
+                    </div>
+
+                    <div class="time-slots" id="time-slots">
+                        <div class="no-slots-msg">Seleccione una fecha disponible en el calendario superior.</div>
+                        <!-- Dynamically populated time slots -->
+                    </div>
+                </div>
+
+                <div class="selected-summary hidden" id="selected-summary">
+                    <strong>Cita seleccionada: </strong> <span id="summary-text">Ninguna</span>
+                </div>
+            </section>
+
+            <!-- Form Section (Modal) -->
+            <div class="modal-overlay hidden" id="form-modal-overlay">
+                <section class="form-section glass-card modal-content" id="form-section">
+                    <div class="modal-header">
+                        <div class="section-title">
+                            <h2>2. Tus Datos</h2>
+                            <p>Confirme la información para su reserva</p>
+                            <p class="modal-summary" id="modal-summary-text"></p>
+                        </div>
+                        <button type="button" class="close-modal-btn" id="close-modal-btn">&times;</button>
+                    </div>
+
+                    <form id="reservation-form">
+                        <input type="hidden" id="selected-date" name="fecha" required>
+                        <input type="hidden" id="selected-hour" name="hora" required>
+                        <input type="hidden" id="tenant-input" name="instituto" required>
+
+                        <div class="form-group autocomplete-container">
+                            <label for="correo">Correo Electrónico <span class="required">*</span></label>
+                            <input type="email" id="correo" name="correo" placeholder="ejemplo@correo.com"
+                                autocomplete="off" required>
+                            <div id="autocomplete-list" class="autocomplete-items hidden"></div>
+                            <small class="hint-text" id="email-hint">Escriba su correo para cargar su perfil.</small>
+                        </div>
+
+                        <div class="form-group fillable">
+                            <label for="nombre">Nombres y Apellidos <span class="required">*</span></label>
+                            <input type="text" id="nombre" name="nombre" placeholder="Juan Pérez" required>
+                        </div>
+
+                        <div class="form-group row-group fillable">
+                            <div class="col">
+                                <label for="phone">Teléfono/Celular <span class="required">*</span></label>
+                                <div class="phone-wrapper">
+                                    <input id="phone" type="tel" name="phone_raw" required>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <label for="edad">Edad <span class="required">*</span></label>
+                                <input type="number" id="edad" name="edad" min="16" max="99" placeholder="Ej. 25"
+                                    required>
+                            </div>
+                        </div>
+
+                        <div class="form-group fillable">
+                            <label for="dedicacion">¿A qué se dedica? <span class="required">*</span></label>
+                            <input type="text" id="dedicacion" name="dedicacion"
+                                placeholder="Estudiante, Profesional, etc." required>
+                        </div>
+
+                        <div class="form-group row-group fillable" id="programs-container">
+                            <!-- Dynamically we might show Category Select depending on tenant -->
+                            <div class="col hidden" id="cat-col">
+                                <label for="categoria">Categoría de Programa</label>
+                                <select id="categoria" name="categoria">
+                                    <option value="">Seleccione Categoría</option>
+                                </select>
+                            </div>
+
+                            <div class="col">
+                                <label for="programa">Programa Académico <span class="required">*</span></label>
+                                <select id="programa" name="programa" required>
+                                    <option value="">Seleccione un programa...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="motivo">Motivo de reserva <span class="required">*</span></label>
+                            <textarea id="motivo" name="motivo" rows="3"
+                                placeholder="Comente brevemente el motivo de la sesión..." required></textarea>
+                        </div>
+
+                        <button type="submit" class="submit-btn" id="submit-btn">
+                            <span>Confirmar Reserva</span>
+                        </button>
+                    </form>
+                </section>
+            </div>
+
+        </main>
+
+        <footer class="app-footer">
+            <p>&copy; 2026 EUROCOACH All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/js/intlTelInput.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/js/utils.js"></script>
+    <script src="main.js"></script>
+</body>
+
+</html>
