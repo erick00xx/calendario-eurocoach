@@ -25,6 +25,8 @@ function doGet(e) {
        result = searchUserProfile(cleanEmail);
     } else if (action === 'getSlots') {
        result = getAvailability();
+    } else if (action === 'getAllReservations') {
+       result = getAllReservations();
     }
   } catch(error) {
     result = { error: error.toString() };
@@ -37,9 +39,21 @@ function doGet(e) {
 function doPost(e) {
   let result = {};
   try {
-    // Handling text/plain POST to avoid CORS preflight, parsing manually
+    // Handling POST actions
     const data = JSON.parse(e.postData.contents);
-    result = createReservation(data);
+    const action = e.parameter.action || data.action;
+    
+    if (action === 'updateReservation') {
+      result = updateReservationData(data);
+    } else if (action === 'updateStudent') {
+      result = updateStudentData(data);
+    } else if (action === 'reschedule') {
+      result = rescheduleReservation(data);
+    } else if (action === 'sendReminder') {
+      result = sendReminderAction(data);
+    } else {
+      result = createReservation(data);
+    }
   } catch (error) {
     result = { success: false, error: error.toString() };
   }
@@ -231,20 +245,38 @@ function createReservation(data) {
   const ampm = hour >= 12 ? 'PM' : 'AM';
   const hDisplay = (hour % 12 || 12) + ':00 ' + ampm;
   
-  // ID, Creado, Nombres, Correo, Teléfono, Edad, Dedicacion, Instituto, Programa, Fecha, Hora, Motivo
+  // Encontrar N° de Sesion buscando registros previos del correo
+  let sessionNumber = 1;
+  const existingData = sheet.getDataRange().getValues();
+  for (let i = existingData.length - 1; i >= 1; i--) {
+     if (existingData[i][3] && existingData[i][3].toString().trim().toLowerCase() === correo.toLowerCase()) {
+         let rawNum = existingData[i][12] ? existingData[i][12].toString() : '0';
+         let matchNum = rawNum.match(/\d+/);
+         let lastNum = matchNum ? parseInt(matchNum[0]) : 0;
+         sessionNumber = lastNum + 1;
+         break;
+     }
+  }
+  
+  const sesionFormatted = "Sesión " + sessionNumber;
+  
+  // ID, Creado, Nombres, Correo, Teléfono, Edad, Dedicacion, Instituto, Programa, Fecha, Hora, Motivo, N° Sesión, Estado + resto en blanco
   sheet.appendRow([
-    resId,
-    now.toLocaleString('es-ES', { timeZone: 'America/Lima' }),
-    nombres,
-    correo,
-    "'" + telefono, // apóstrofe para evitar formula error
-    edad,
-    dedicacion,
-    instUniv,
-    programa,
-    dateStr,
-    hDisplay,
-    motivo
+    resId,                                                      // A (0)
+    now.toLocaleString('es-ES', { timeZone: 'America/Lima' }),  // B (1)
+    nombres,                                                    // C (2)
+    correo,                                                     // D (3)
+    "'" + telefono,                                             // E (4)
+    edad,                                                       // F (5)
+    dedicacion,                                                 // G (6)
+    instUniv,                                                   // H (7)
+    programa,                                                   // I (8)
+    dateStr,                                                    // J (9)
+    hDisplay,                                                   // K (10)
+    motivo,                                                     // L (11)
+    sesionFormatted,                                            // M (12)
+    "Programada",                                               // N (13)
+    "", "", "", "", "", "", "", ""                              // O to V (14-21)
   ]);
   
   // 3. Enviar correo de confirmación
@@ -292,6 +324,7 @@ function sendConfirmationEmail(correo, nombres, fecha, hora, instituto, resId, e
   
   MailApp.sendEmail({
     to: correo,
+    cc: Session.getActiveUser().getEmail(),
     subject: `Confirmación de Reserva EUROCOACH - ${fecha} ${hora}`,
     htmlBody: htmlBody
   });
@@ -306,9 +339,8 @@ function cancelReservation(id) {
   
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === id) {
-      // Marcar como cancelada en alguna columna (por ej. Motivo se le agrega "CANCELADO")
-      const currentMotivo = data[i][11];
-      sheet.getRange(i + 1, 12).setValue("❌ [CANCELADO] " + currentMotivo);
+      // Marcar como Cancelada en columna N (índice 13 -> Columna 14 para getRange)
+      sheet.getRange(i + 1, 14).setValue("Cancelada");
       
       htmlResult = `
         <div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
@@ -333,4 +365,166 @@ function cancelReservation(id) {
   
   return ContentService.createTextOutput(htmlResult)
     .setMimeType(ContentService.MimeType.HTML);
+}
+
+// ----------------------------------------------------
+// Admin Panel Functions
+// ----------------------------------------------------
+function getAllReservations() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  
+  const h = data[0];
+  const list = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    
+    // Parse Dates cleanly to strings
+    let created = row[1];
+    if (created instanceof Date) {
+        created = Utilities.formatDate(created, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+    }
+    
+    let reservaDate = row[9];
+    if (reservaDate instanceof Date) {
+        reservaDate = Utilities.formatDate(reservaDate, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    }
+    
+    list.push({
+      id: row[0] ? row[0].toString() : '',
+      creado: created ? created.toString() : '',
+      nombres: row[2] ? row[2].toString() : '',
+      correo: row[3] ? row[3].toString() : '',
+      telefono: row[4] ? row[4].toString().replace("'", "") : '',
+      edad: row[5] ? row[5].toString() : '',
+      dedicacion: row[6] ? row[6].toString() : '',
+      instituto: row[7] ? row[7].toString() : '',
+      programa: row[8] ? row[8].toString() : '',
+      fecha: reservaDate ? reservaDate.toString() : '',
+      hora: row[10] ? row[10].toString() : '',
+      motivo: row[11] ? row[11].toString() : '',
+      sesionNumero: row[12] ? row[12].toString() : '',
+      estado: row[13] ? row[13].toString() : 'Programada',
+      problema: row[14] ? row[14].toString() : '',
+      profundidad: row[15] ? row[15].toString() : '',
+      objetivo: row[16] ? row[16].toString() : '',
+      impacto: row[17] ? row[17].toString() : '',
+      tipoDificultad: row[18] ? row[18].toString() : '',
+      nivelCompromiso: row[19] ? row[19].toString() : '',
+      notas: row[20] ? row[20].toString() : '',
+      capturas: row[21] ? row[21].toString() : ''
+    });
+  }
+  return list.reverse(); // Newest first
+}
+
+function updateReservationData(payload) {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === payload.id) {
+      const rowIndex = i + 1;
+      sheet.getRange(rowIndex, 14).setValue(payload.estado);
+      sheet.getRange(rowIndex, 13).setValue(payload.sesionNumero);
+      sheet.getRange(rowIndex, 15).setValue(payload.problema);
+      sheet.getRange(rowIndex, 16).setValue(payload.profundidad);
+      sheet.getRange(rowIndex, 17).setValue(payload.objetivo);
+      sheet.getRange(rowIndex, 18).setValue(payload.impacto);
+      sheet.getRange(rowIndex, 19).setValue(payload.tipoDificultad);
+      sheet.getRange(rowIndex, 20).setValue(payload.nivelCompromiso);
+      sheet.getRange(rowIndex, 21).setValue(payload.notas);
+      sheet.getRange(rowIndex, 22).setValue(payload.capturas);
+      return { success: true };
+    }
+  }
+  return { success: false, message: 'No encontrado' };
+}
+
+function updateStudentData(payload) {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === payload.id) {
+      const rowIndex = i + 1;
+      sheet.getRange(rowIndex, 3).setValue(payload.nombres);
+      sheet.getRange(rowIndex, 5).setValue("'" + payload.telefono);
+      sheet.getRange(rowIndex, 6).setValue(payload.edad);
+      sheet.getRange(rowIndex, 7).setValue(payload.dedicacion);
+      sheet.getRange(rowIndex, 8).setValue(payload.instituto);
+      sheet.getRange(rowIndex, 9).setValue(payload.programa);
+      return { success: true };
+    }
+  }
+  return { success: false };
+}
+
+function rescheduleReservation(payload) {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
+  const data = sheet.getDataRange().getValues();
+  
+  let oldRow = null;
+  let rowIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === payload.id) {
+      oldRow = data[i];
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  if (!oldRow) return { success: false, message: 'Reserva no encontrada' };
+  
+  // Set old to Reprogramada
+  sheet.getRange(rowIndex, 14).setValue("Reprogramada");
+  if (payload.motivoReprogramacion) {
+     const currentNotas = oldRow[20] || '';
+     sheet.getRange(rowIndex, 21).setValue(currentNotas + " [Reprogramó por: " + payload.motivoReprogramacion + "]");
+  }
+  
+  // Create New Reservation using old data but new Date/Time
+  const createPayload = {
+    nombre: oldRow[2],
+    correo: oldRow[3],
+    telefono: oldRow[4].toString().replace("'", ""),
+    edad: oldRow[5],
+    dedicacion: oldRow[6],
+    instituto: oldRow[7],
+    programa: oldRow[8],
+    fecha: payload.nuevaFecha,
+    hora: payload.nuevaHora,
+    motivo: payload.motivoReprogramacion || "Reprogramación de Sesión"
+  };
+  return createReservation(createPayload);
+}
+
+function sendReminderAction(payload) {
+  let color = '#4a90e2';
+  const instituto = payload.instituto || '';
+  if(instituto.toLowerCase().includes('empresa')) color = '#df6621'; 
+  else if(instituto.toLowerCase().includes('blackwell')) color = '#003c8f'; 
+  else if(instituto.toLowerCase().includes('neumann')) color = '#7b2282'; 
+  else if(instituto.toLowerCase().includes('autónoma')) color = '#e3000f';
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+      <div style="background-color: ${color}; color: white; padding: 20px; text-align: center;">
+        <h2>EUROCOACH</h2>
+      </div>
+      <div style="padding: 20px; color: #333;">
+        <p>Hola <strong>${payload.nombres}</strong>,</p>
+        <p>${payload.mensaje.replace(/\\n/g, '<br>')}</p>
+        <br>
+        ${payload.links ? `<p><strong>Enlaces:</strong> <br> <a href="${payload.links}">${payload.links}</a></p>` : ''}
+      </div>
+    </div>
+  `;
+  
+  MailApp.sendEmail({
+    to: payload.correo,
+    subject: payload.asunto,
+    htmlBody: htmlBody
+  });
+  
+  return { success: true };
 }

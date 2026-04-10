@@ -1,6 +1,6 @@
 // CONFIGURACIÓN DE LA URL DE APPS SCRIPT
 // REEMPLAZAR ESTA CADENA CON LA URL PUBLICADA COMO APLICACIÓN WEB DE APPS SCRIPT
-const API_URL = "https://script.google.com/macros/s/AKfycbw8_2OAZsBaQ2uACL01U6CNUMTMqcP-fwK0CwhCQdhGNeoOEnupO7vHTQWRPea4j8_R/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzXbJ2Zps3upHueJRdG94Ww5qdEG6E6mQFDZDE8ohV6e0JtVedH8wD5vklPB7o2JSnQ5g/exec";
 
 const tenants = {
     'instituto_empresa': {
@@ -275,7 +275,7 @@ function autofillProfile(profile) {
     });
     Toast.fire({
         icon: "success",
-        title: "Datos precargados exitosamente (excepto Motivo)"
+        title: "Datos autocompletados"
     });
 }
 

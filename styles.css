@@ -510,6 +510,27 @@ textarea:focus {
     width: 100%;
 }
 
+.iti__country-list {
+    max-width: 320px !important;
+    /* Forces bounding so names wrap instead of expanding modal */
+    white-space: normal !important;
+    border-radius: 8px !important;
+    box-shadow: var(--shadow-md) !important;
+    z-index: 1050 !important;
+}
+
+/* Force standard absolute dropdown behavior on mobile devices avoiding the buggy full-screen popup */
+body.iti-mobile .iti__country-list,
+.iti-mobile .iti__country-list {
+    position: absolute !important;
+    top: 100% !important;
+    bottom: auto !important;
+    left: 0 !important;
+    right: auto !important;
+    width: max-content !important;
+    max-height: 220px !important;
+}
+
 textarea {
     resize: vertical;
     min-height: 80px;

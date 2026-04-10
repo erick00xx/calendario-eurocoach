@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Eurocoach</title>
+    <!-- Mismo estilo base que la web pública -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/css/intlTelInput.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/js/intlTelInput.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Flatpickr (Fechas Rango) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
+
+    <!-- DataTables -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="admin-body">
+    <div id="loader" class="loader-overlay active">
+        <div class="spinner"></div>
+        <p>Cargando panel de gestión...</p>
+    </div>
+
+    <div class="admin-container">
+        <!-- Top Navbar -->
+        <header class="admin-header">
+            <div class="header-title">
+                <h1>Gestión de Reservas Eurocoach</h1>
+            </div>
+            <button class="btn-logout"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</button>
+        </header>
+
+        <!-- Dashboard Top Layout -->
+        <div class="dashboard-hero">
+            <!-- 1. KPIs Full Width Top -->
+            <div class="kpi-grid" id="kpi-container">
+                <!-- KPIs Rendered Here -->
+            </div>
+
+            <!-- 2. Charts Full Width Bottom (Split in 2) -->
+            <div class="charts-grid">
+                <div class="chart-card-box">
+                    <h3 style="font-size:1rem;color:#333;margin-bottom:10px;">Estados</h3>
+                    <div class="chart-wrapper" style="height: 180px;">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card-box">
+                    <h3 style="font-size:1rem;color:#333;margin-bottom:10px;">Universidades y Redes</h3>
+                    <div class="chart-wrapper" style="height: 180px;">
+                        <canvas id="instituteChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Section -->
+        <section class="filters-section">
+            <div class="filter-header">
+                <h3>Filtros</h3>
+            </div>
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label>Rango de Fechas (Reserva):</label>
+                    <input type="text" id="filter-date-range" class="form-control" placeholder="Seleccionar fechas...">
+                </div>
+                <div class="filter-group">
+                    <label>Instituto/Univ.:</label>
+                    <select id="filter-institute" class="form-control">
+                        <option value="Todos">Todas</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Estado:</label>
+                    <select id="filter-status" class="form-control">
+                        <option value="Todos">Todos</option>
+                        <option value="Programada">Programada</option>
+                        <option value="Realizada">Realizada</option>
+                        <option value="Cancelada">Cancelada</option>
+                        <option value="No asistió">No asistió</option>
+                        <option value="Reprogramada">Reprogramada</option>
+                    </select>
+                </div>
+                <div class="filter-group filter-actions">
+                    <button id="btn-clear-filters" class="btn-clear"><i class="fas fa-times"></i> Limpiar
+                        Filtros</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Table Section -->
+        <section class="table-section">
+            <div class="table-responsive">
+                <table class="admin-table" id="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Estado</th>
+                            <th>N° Sesión</th>
+                            <th>Fecha Reserva</th>
+                            <th>Hora</th>
+                            <th>Nombres y Apellidos</th>
+                            <th>Instituto o Universidad</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <!-- Iterated Dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <!-- Management Modal -->
+    <div id="management-modal" class="modal-overlay hidden">
+        <div class="modal-content management-modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Detalles de la Reserva</h2>
+                <button class="close-modal-btn" onclick="closeModal('management-modal')">&times;</button>
+            </div>
+
+            <!-- Tabs Navigation -->
+            <div class="modal-tabs">
+                <button class="tab-btn active" data-tab="tab-alumno"><i class="fas fa-user-graduate"></i> Ficha del
+                    Alumno</button>
+                <button class="tab-btn" data-tab="tab-sesion"><i class="fas fa-clipboard-list"></i> Inf. de la
+                    Sesión</button>
+                <button class="tab-btn" data-tab="tab-reprograma"><i class="fas fa-calendar-alt"></i>
+                    Reprogramación</button>
+                <button class="tab-btn" data-tab="tab-recordatorio"><i class="fas fa-envelope"></i>
+                    Recordatorio</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- TAB 1: Alumno -->
+                <div id="tab-alumno" class="tab-content active">
+                    <div class="info-grid" id="alumno-info">
+                        <!-- Llenado por JS -->
+                    </div>
+                    <!-- Historial Citas -->
+                    <h4
+                        style="margin-top: 20px; font-size: 1rem; color: var(--primary-dark); border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                        Historial de Sesiones</h4>
+                    <div id="alumno-historial" style="margin-top:10px; max-height: 200px; overflow-y: auto;"></div>
+
+                    <div class="modal-footer-actions">
+                        <button class="btn-primary" onclick="openEditStudentModal()"><i class="fas fa-edit"></i> Editar
+                            Datos de Alumno</button>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Información de la Sesión -->
+                <div id="tab-sesion" class="tab-content">
+                    <form id="form-session-info">
+                        <div class="form-grid-2">
+                            <div class="form-group">
+                                <label>Estado de la sesión</label>
+                                <select id="ses-estado" class="form-control">
+                                    <option value="Programada">Programada</option>
+                                    <option value="Realizada">Realizada</option>
+                                    <option value="Cancelada">Cancelada</option>
+                                    <option value="No asistió">No asistió</option>
+                                    <option value="Reprogramada">Reprogramada</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>N° de Sesión</label>
+                                <input type="text" id="ses-numero" class="form-control">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Problema hallado</label>
+                                <input type="text" id="ses-problema" class="form-control">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Profundidad del Problema</label>
+                                <input type="text" id="ses-profundidad" class="form-control">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Objetivo de la sesión</label>
+                                <input type="text" id="ses-objetivo" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>Impacto en su éxito profesional</label>
+                                <select id="ses-impacto" class="form-control">
+                                    <option value="">Seleccione...</option>
+                                    <option value="Nada satisfecho">Nada satisfecho</option>
+                                    <option value="Parcialmente satisfecho">Parcialmente satisfecho</option>
+                                    <option value="Satisfecho">Satisfecho</option>
+                                    <option value="Más que satisfecho">Más que satisfecho</option>
+                                    <option value="Muy satisfecho">Muy satisfecho</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Tipo de Dificultad</label>
+                                <select id="ses-dificultad" class="form-control">
+                                    <option value="">Seleccione...</option>
+                                    <option value="Alta">Alta</option>
+                                    <option value="Media - Alta">Media - Alta</option>
+                                    <option value="Media">Media</option>
+                                    <option value="Baja">Baja</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Nivel de compromiso (1 al 10)</label>
+                                <input type="number" id="ses-compromiso" min="1" max="10" class="form-control">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Notas</label>
+                                <textarea id="ses-notas" class="form-control" rows="3"></textarea>
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Capturas / URLs (separadas por módulo "|")</label>
+                                <input type="text" id="ses-capturas" class="form-control" placeholder="url1 | url2">
+                            </div>
+                        </div>
+                        <div class="modal-footer-actions">
+                            <button type="button" class="btn-success" onclick="saveSessionInfo()"><i
+                                    class="fas fa-save"></i> Guardar Cambios</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tab 3: Reprogramación -->
+                <div id="tab-reprograma" class="tab-content">
+                    <p class="tab-desc">Selecciona una nueva fecha y horario para reprogramar la cita seleccionada. La
+                        reserva actual cambiará automáticamente a estado "Reprogramada" y se creará una nueva reserva.
+                    </p>
+                    <div class="form-group">
+                        <label>Motivo de Reprogramación:</label>
+                        <input type="text" id="reprog-motivo" class="form-control"
+                            placeholder="Ejem: Solicitud del alumno por motivos de viaje">
+                    </div>
+                    <div id="mini-calendar" class="mini-calendar-container">
+                        <!-- Dates and Slots will be populated here -->
+                    </div>
+                    <div class="modal-footer-actions mt-3">
+                        <button type="button" class="btn-warning" onclick="processReschedule()" id="btn-reprogramar"
+                            disabled><i class="fas fa-calendar-check"></i> Ejecutar Reprogramación</button>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Enviar Recordatorio -->
+                <div id="tab-recordatorio" class="tab-content">
+                    <div class="form-group">
+                        <label>Asunto del Correo:</label>
+                        <input type="text" id="email-subject" class="form-control"
+                            value="Recordatorio de Sesión de Coaching - EUROCOACH">
+                    </div>
+                    <div class="form-group">
+                        <label>Cuerpo del Mensaje (Personalizado):</label>
+                        <textarea id="email-body" class="form-control"
+                            rows="5">Hola, te recordamos que tienes una sesión programada para pronto. Por favor ingresa a tiempo usando el link.</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Links Adjuntos (Opcional):</label>
+                        <input type="text" id="email-links" class="form-control"
+                            placeholder="https://zoom.us/j/12345 (Título: Enlace de Zoom)">
+                    </div>
+                    <div class="modal-footer-actions">
+                        <button type="button" class="btn-primary" onclick="sendReminderEmail()"><i
+                                class="fas fa-paper-plane"></i> Enviar Recordatorio</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Student Modal (Smaller) -->
+    <div id="edit-student-modal" class="modal-overlay hidden">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Editar Ficha del Alumno</h2>
+                <button class="close-modal-btn" onclick="closeModal('edit-student-modal')">&times;</button>
+            </div>
+            <div class="modal-body p-3">
+                <form id="form-edit-student">
+                    <div class="form-group">
+                        <label>Nombres y Apellidos</label>
+                        <input type="text" id="edit-nombres" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Correo</label>
+                        <input type="email" id="edit-correo" class="form-control" disabled>
+                        <small style="color: #888">El ID principal (correo) no se puede modificar aquí.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Teléfono/Celular</label>
+                        <input type="text" id="edit-telefono" class="form-control">
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label>Edad</label>
+                            <input type="number" id="edit-edad" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>A que se dedica</label>
+                            <input type="text" id="edit-dedicacion" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Instituto o Universidad</label>
+                        <input type="text" id="edit-instituto" class="form-control" disabled
+                            style="background-color: #f1f4f8;">
+                        <small style="color: #888">El instituto no se puede modificar.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Programa académico</label>
+                        <select id="edit-programa" class="form-control"></select>
+                    </div>
+                    <div class="modal-footer-actions">
+                        <button type="button" class="btn-success" onclick="saveStudentEdit()"><i
+                                class="fas fa-save"></i> Guardar Ficha</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+
+</html>
