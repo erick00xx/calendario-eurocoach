@@ -51,6 +51,8 @@ function doPost(e) {
       result = rescheduleReservation(data);
     } else if (action === 'sendReminder') {
       result = sendReminderAction(data);
+    } else if (action === 'uploadImage') {
+      result = uploadImageDrive(data);
     } else {
       result = createReservation(data);
     }
@@ -497,6 +499,28 @@ function rescheduleReservation(payload) {
   };
   return createReservation(createPayload);
 }
+
+// ----------------------------------------------------
+// Upload Images to Drive
+// ----------------------------------------------------
+function uploadImageDrive(payload) {
+  try {
+    const folder = DriveApp.getFolderById("1RMtfFtzCKwtBLYtUIzx4p3UiPZTQAQtP");
+    // Decode base64 to blob
+    const rawBase64 = payload.base64.replace(/^data:image\/[a-z]+;base64,/, "");
+    const blob = Utilities.newBlob(Utilities.base64Decode(rawBase64), payload.mimeType, payload.filename);
+    
+    const file = folder.createFile(blob);
+    
+    // Obtener link limpio mediante lh3
+    const url = "https://lh3.googleusercontent.com/d/" + file.getId();
+    
+    return { success: true, url: url };
+  } catch (error) {
+    return { success: false, message: error.toString() };
+  }
+}
+
 
 function sendReminderAction(payload) {
   let color = '#4a90e2';

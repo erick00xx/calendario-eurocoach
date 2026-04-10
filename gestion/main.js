@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzXbJ2Zps3upHueJRdG94Ww5qdEG6E6mQFDZDE8ohV6e0JtVedH8wD5vklPB7o2JSnQ5g/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyN6S4uKdsQy9D5YXzu2XdsvimBTUF9DH07CSzAZP88UzXwIupU4iIn4Vq2z03U7CR0fg/exec";
 
 // Global State
 let allReservations = [];
@@ -13,6 +13,8 @@ let statusChartInstance = null;
 let instChartInstance = null;
 let datePickerInstance = null;
 let dtInstance = null;
+
+let currentSessionImages = [];
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -102,6 +104,38 @@ function setupEventListeners() {
         document.getElementById('filter-institute').value = 'Todos';
         document.getElementById('filter-status').value = 'Todos';
         applyFilters();
+    });
+
+    // Image Upload Events
+    const dropzone = document.getElementById('dropzone');
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', e => {
+        e.preventDefault(); dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files) handleImageFiles(e.dataTransfer.files);
+    });
+
+    document.getElementById('file-input').addEventListener('change', e => {
+        if (e.target.files) handleImageFiles(e.target.files);
+        e.target.value = ''; // Reset
+    });
+
+    document.addEventListener('paste', e => {
+        // Only if modal is open and on tab 2
+        if (!document.getElementById('management-modal').classList.contains('hidden') &&
+            document.getElementById('tab-sesion').classList.contains('active')) {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            const files = [];
+            for (let item of items) {
+                if (item.type.indexOf('image') === 0) files.push(item.getAsFile());
+            }
+            if (files.length > 0) handleImageFiles(files);
+        }
+    });
+
+    // Logout
+    document.querySelector('.btn-logout').addEventListener('click', () => {
+        window.location.reload();
     });
 
     // Modal Tabs
@@ -319,6 +353,115 @@ function renderTable() {
 }
 
 // ----------------------------------------------------
+// Image Uploading Logic
+// ----------------------------------------------------
+function handleImageFiles(files) {
+    const arr = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (currentSessionImages.length + arr.length > 5) {
+        Swal.fire('Límite excedido', 'Max 5 imágenes permitidas', 'warning');
+        return;
+    }
+    arr.forEach(file => {
+        // Create temp local preview
+        const localUrl = URL.createObjectURL(file);
+        const tempObj = { localUrl, loading: true };
+        currentSessionImages.push(tempObj);
+        renderImagePreviews();
+
+        // Compress and upload
+        compressImage(file, (base64, mimeType, filename) => {
+            uploadToDrive(base64, mimeType, filename, tempObj);
+        });
+    });
+}
+
+function compressImage(file, callback) {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = event => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 1200;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } }
+            else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            const base64Str = dataUrl.split(',')[1];
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            callback(base64Str, 'image/jpeg', `captura_${timestamp}.jpg`);
+        }
+    }
+}
+
+async function uploadToDrive(base64, mimeType, filename, tempObj) {
+    try {
+        const payload = { action: 'uploadImage', base64, mimeType, filename };
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain' }
+        });
+        const ans = await res.json();
+        console.log("Upload Response: ", ans);
+
+        const idx = currentSessionImages.indexOf(tempObj);
+        if (ans.success && idx !== -1) {
+            currentSessionImages[idx] = ans.url;
+        } else if (idx !== -1) {
+            currentSessionImages.splice(idx, 1);
+            Swal.fire('Error del Servidor', ans.message || ans.error || 'Error desconocido revisa la consola', 'error');
+        }
+        renderImagePreviews();
+    } catch (err) {
+        console.error(err);
+        const idx = currentSessionImages.indexOf(tempObj);
+        if (idx !== -1) currentSessionImages.splice(idx, 1);
+        renderImagePreviews();
+    }
+}
+
+function renderImagePreviews() {
+    const container = document.getElementById('image-preview-container');
+    container.innerHTML = '';
+    currentSessionImages.forEach((imgObj, i) => {
+        const isObj = typeof imgObj === 'object';
+        const urlToView = isObj ? imgObj.localUrl : imgObj;
+
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+        div.innerHTML = `<img src="${urlToView}" onclick="viewFullImage('${urlToView}')">`;
+
+        if (isObj && imgObj.loading) {
+            div.innerHTML += `<div class="loader-spinner"><i class="fas fa-spinner fa-spin fa-lg" style="color:#3498db;"></i></div>`;
+        } else {
+            div.innerHTML += `<div class="remove-btn" onclick="removeImage(${i})">X</div>`;
+        }
+        container.appendChild(div);
+    });
+}
+
+function removeImage(idx) {
+    currentSessionImages.splice(idx, 1);
+    renderImagePreviews();
+}
+
+function viewFullImage(url) {
+    // If it's a Drive URL without explicit viewer, attempting naive load. lh3 works.
+    document.getElementById('viewer-img').src = url;
+    const aLink = document.getElementById('viewer-link');
+    if (aLink) aLink.href = url;
+    document.getElementById('image-viewer-modal').classList.remove('hidden');
+}
+
+// ----------------------------------------------------
 // Modals
 // ----------------------------------------------------
 function closeModal(id) {
@@ -383,7 +526,9 @@ function openModal(id) {
     document.getElementById('ses-dificultad').value = data.tipoDificultad;
     document.getElementById('ses-compromiso').value = data.nivelCompromiso;
     document.getElementById('ses-notas').value = data.notas;
-    document.getElementById('ses-capturas').value = data.capturas;
+
+    currentSessionImages = data.capturas ? data.capturas.split('|').map(x => x.trim()).filter(x => x) : [];
+    renderImagePreviews();
 
     // Tab 3: Reprogramación
     document.getElementById('reprog-motivo').value = '';
@@ -412,7 +557,7 @@ async function saveSessionInfo() {
         tipoDificultad: document.getElementById('ses-dificultad').value,
         nivelCompromiso: document.getElementById('ses-compromiso').value,
         notas: document.getElementById('ses-notas').value,
-        capturas: document.getElementById('ses-capturas').value
+        capturas: currentSessionImages.join(' | ')
     };
 
     try {
