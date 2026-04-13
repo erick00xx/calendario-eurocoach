@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbyN6S4uKdsQy9D5YXzu2XdsvimBTUF9DH07CSzAZP88UzXwIupU4iIn4Vq2z03U7CR0fg/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzHJ3ToD3dIXJBe-J_GWkZs-Bc_UHgd7Qo8RBJFnsRmcWEMbgImiTmnuMmI6qQ9ifL_rA/exec";
 
 // Global State
 let allReservations = [];
@@ -94,15 +94,19 @@ function populateInstituteFilter() {
     });
 }
 
+let isClearingFilters = false;
+
 function setupEventListeners() {
     // Filters
     document.getElementById('filter-institute').addEventListener('change', applyFilters);
     document.getElementById('filter-status').addEventListener('change', applyFilters);
 
     document.getElementById('btn-clear-filters').addEventListener('click', () => {
+        isClearingFilters = true;
         if (datePickerInstance) datePickerInstance.clear();
         document.getElementById('filter-institute').value = 'Todos';
         document.getElementById('filter-status').value = 'Todos';
+        isClearingFilters = false;
         applyFilters();
     });
 
@@ -150,6 +154,8 @@ function setupEventListeners() {
 }
 
 function applyFilters() {
+    if (isClearingFilters) return;
+
     const dates = datePickerInstance ? datePickerInstance.selectedDates : [];
     const inst = document.getElementById('filter-institute').value;
     const stat = document.getElementById('filter-status').value;
@@ -158,6 +164,7 @@ function applyFilters() {
         if (!ddmmyyyy || typeof ddmmyyyy !== 'string') return null;
         const parts = ddmmyyyy.split('/');
         if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]);
+
         return null;
     };
 
@@ -317,7 +324,7 @@ function renderTable() {
     let html = '';
 
     if ($.fn.DataTable.isDataTable('#admin-table')) {
-        $('#admin-table').DataTable().clear().destroy();
+        $('#admin-table').DataTable().destroy();
     }
 
     const parseDateISO = (ddmmyyyy) => {
@@ -479,17 +486,48 @@ function openModal(id) {
     document.querySelector('[data-tab="tab-alumno"]').classList.add('active');
     document.getElementById('tab-alumno').classList.add('active');
 
-    // Tab 1: Alumno
+    // Setting Modal Subtitle
+    const sub = document.getElementById('modal-subtitle');
+    if (sub) {
+        sub.innerHTML = `
+            <span style="color:#311b54;font-weight:700;"><i class="far fa-calendar-alt" style="color:#06c0cf;margin-right:4px;"></i>${data.fecha}</span>
+            <span style="color:#888;">|</span>
+            <span style="color:#311b54;font-weight:700;"><i class="far fa-clock" style="color:#06c0cf;margin-right:4px;"></i>${data.hora}</span>
+            <span style="color:#888;">|</span>
+            <span style="color:#311b54;font-weight:600;"><i class="fas fa-map-marker-alt" style="color:#e74c3c;margin-right:4px;"></i>${data.instituto}</span>
+            <span style="color:#888;">|</span>
+            <span style="color:#06c0cf;font-weight:700;">${data.sesionNumero || 'Nueva Cita'}</span>
+        `;
+    }
+
+    // Tab 1: Info (Grouped using ficha-section)
     document.getElementById('alumno-info').innerHTML = `
-        <div class="info-item"><label>Creado</label><span>${data.creado}</span></div>
-        <div class="info-item"><label>Nombres</label><span>${data.nombres}</span></div>
-        <div class="info-item"><label>Correo</label><span>${data.correo}</span></div>
-        <div class="info-item"><label>Teléfono</label><span>${data.telefono}</span></div>
-        <div class="info-item"><label>Edad</label><span>${data.edad || 'N/A'}</span></div>
-        <div class="info-item"><label>Ocupación</label><span>${data.dedicacion || 'N/A'}</span></div>
-        <div class="info-item"><label>Instituto</label><span>${data.instituto}</span></div>
-        <div class="info-item"><label>Programa</label><span>${data.programa || 'N/A'}</span></div>
-        <div class="info-item full-width" style="grid-column: 1 / -1;"><label>Motivo de reserva de esta cita</label><span>${data.motivo || 'No especificó'}</span></div>
+        <div class="ficha-section sec-estudiante">
+            <h5 class="section-title"><i class="fas fa-user"></i> Datos del Estudiante</h5>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div class="info-item"><label>Nombre Completo</label><span>${data.nombres}</span></div>
+                <div class="info-item"><label>Teléfono</label><span>${data.telefono}</span></div>
+                <div class="info-item"><label>Correo Electrónico</label><span>${data.correo}</span></div>
+                <div class="info-item"><label>Profesión / Ocup.</label><span>${data.dedicacion || 'N/A'}</span></div>
+                <div class="info-item"><label>Edad</label><span>${data.edad || 'N/A'}</span></div>
+            </div>
+        </div>
+        
+        <div class="ficha-section sec-instituto">
+            <h5 class="section-title"><i class="fas fa-university"></i> Instituto y Programa</h5>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div class="info-item"><label>Instituto / Univ.</label><span>${data.instituto}</span></div>
+                <div class="info-item"><label>Programa Académico</label><span>${data.programa || 'N/A'}</span></div>
+            </div>
+        </div>
+        
+        <div class="ficha-section sec-motivo">
+            <h5 class="section-title"><i class="fas fa-bullseye"></i> Registro de Sesión</h5>
+            <div style="display:grid; grid-template-columns:1fr; gap:15px;">
+                <div class="info-item"><label>Creado</label><span>${data.creado}</span></div>
+                <div class="info-item"><label>Motivo Central de la Cita</label><span>${data.motivo || 'No especificó'}</span></div>
+            </div>
+        </div>
     `;
 
     // Process Historial
@@ -814,3 +852,267 @@ async function sendReminderEmail() {
         Swal.fire('Error', 'Fallo al enviar correo.', 'error');
     }
 }
+
+// ----------------------------------------------------
+// Deleting Records
+// ----------------------------------------------------
+async function deleteCurrentRecord() {
+    const confirmation = await Swal.fire({
+        title: '¿Estás completamente seguro?',
+        text: "Vas a eliminar toda la tarjeta, su historial y soltarás el bloque horario correspondiente en Google Calendar. Esta acción es IRREVERSIBLE.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e74c3c',
+        cancelButtonColor: '#7f8c8d',
+        confirmButtonText: 'Sí, Eliminar Permanentemente',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (confirmation.isConfirmed) {
+        showLoader('Eliminando reserva y limpiando calendario...');
+        try {
+            const payload = { action: 'deleteRecord', id: currentEditingId };
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            const ans = await res.json();
+
+            if (ans.success) {
+                closeModal('management-modal');
+                Swal.fire('¡Eliminado!', 'El registro fue completamente eliminado.', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                Swal.fire('Error', ans.message || 'Fallo desconocido.', 'error');
+                closeLoader();
+            }
+        } catch (e) {
+            closeLoader();
+            Swal.fire('Error de Conexión', e.toString(), 'error');
+        }
+    }
+}
+
+// ----------------------------------------------------
+// Canceling Records (Just Status Change + Calendar Freeing)
+// ----------------------------------------------------
+async function cancelCurrentRecord() {
+    const confirmation = await Swal.fire({
+        title: '¿Confirmar Cancelación?',
+        text: "La cita se marcará como Cancelada y se liberará su espacio del Google Calendar inmediatamente. El registro histórico permanecerá disponible.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e74c3c',
+        cancelButtonColor: '#7f8c8d',
+        confirmButtonText: 'Sí, Cancelar Cita',
+        cancelButtonText: 'No, Volver'
+    });
+
+    if (confirmation.isConfirmed) {
+        showLoader('Cancelando reserva y liberando calendario...');
+        try {
+            const obj = allReservations.find(r => r.id === currentEditingId);
+
+            // Reusing updateReservationData standard payload, BUT overriding 'estado' 
+            const payload = {
+                action: 'updateReservation',
+                id: currentEditingId,
+                estado: 'Cancelada',
+                sesionNumero: obj.sesionNumero || '',
+                problema: obj.problema || '',
+                profundidad: obj.profundidad || '',
+                objetivo: obj.objetivo || '',
+                impacto: obj.impacto || '',
+                tipoDificultad: obj.tipoDificultad || '',
+                nivelCompromiso: obj.nivelCompromiso || '',
+                notas: obj.notas || '',
+                capturas: obj.capturas || ''
+            };
+
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            const ans = await res.json();
+
+            if (ans.success) {
+                closeModal('management-modal');
+                Swal.fire('¡Cancelada!', 'La cita fue cancelada y liberada del calendario.', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                Swal.fire('Error', ans.message || "Fallo en el servidor al intentar cancelar", 'error');
+                closeLoader();
+            }
+        } catch (e) {
+            closeLoader();
+            Swal.fire('Error de Conexión', e.toString(), 'error');
+        }
+    }
+}
+
+// ============================================================
+// VISTA CALENDARIO
+// ============================================================
+let calCurrentYear = new Date().getFullYear();
+let calCurrentMonth = new Date().getMonth(); // 0-based
+
+function getCalInstClass(inst) {
+    if (!inst) return 'other';
+    const i = inst.toLowerCase();
+    if (i.includes('blackwell')) return 'blackwell';
+    if (i.includes('empresa')) return 'ie';
+    if (i.includes('neumann')) return 'neumann';
+    if (i.includes('autónoma') || i.includes('autonoma')) return 'ua';
+    return 'other';
+}
+
+function parseReservationDate(dateStr) {
+    // Supports DD/MM/YYYY
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const p = dateStr.split('/');
+    if (p.length === 3) return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+    return null;
+}
+
+function switchView(view) {
+    const listEl = document.getElementById('view-list');
+    const calEl = document.getElementById('view-calendar');
+    const btnList = document.getElementById('btn-view-list');
+    const btnCal = document.getElementById('btn-view-cal');
+
+    if (view === 'list') {
+        listEl.style.display = '';
+        calEl.style.display = 'none';
+        btnList.classList.add('active');
+        btnCal.classList.remove('active');
+    } else {
+        listEl.style.display = 'none';
+        calEl.style.display = '';
+        btnList.classList.remove('active');
+        btnCal.classList.add('active');
+        renderCalendarGrid();
+    }
+}
+
+function calPrevMonth() {
+    calCurrentMonth--;
+    if (calCurrentMonth < 0) { calCurrentMonth = 11; calCurrentYear--; }
+    renderCalendarGrid();
+}
+
+function calNextMonth() {
+    calCurrentMonth++;
+    if (calCurrentMonth > 11) { calCurrentMonth = 0; calCurrentYear++; }
+    renderCalendarGrid();
+}
+
+function renderCalendarGrid() {
+    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    document.getElementById('cal-month-label').textContent = `${months[calCurrentMonth]} de ${calCurrentYear}`;
+
+    const grid = document.getElementById('cal-grid');
+    grid.innerHTML = '';
+
+    const today = new Date();
+    const firstDay = new Date(calCurrentYear, calCurrentMonth, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(calCurrentYear, calCurrentMonth + 1, 0).getDate();
+
+    // Group filteredReservations by YYYY-MM-DD key
+    const byDate = {};
+    filteredReservations.forEach(r => {
+        const d = parseReservationDate(r.fecha);
+        if (!d) return;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (!byDate[key]) byDate[key] = [];
+        byDate[key].push(r);
+    });
+
+    // Empty leading cells
+    for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'cal-cell empty';
+        grid.appendChild(empty);
+    }
+
+    // Day cells
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateKey = `${calCurrentYear}-${String(calCurrentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const reservations = byDate[dateKey] || [];
+        const isToday = today.getFullYear() === calCurrentYear && today.getMonth() === calCurrentMonth && today.getDate() === day;
+
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell' + (isToday ? ' today' : '');
+        cell.innerHTML = `<div class="cal-day-num">${day}</div>`;
+
+        if (reservations.length > 0) {
+            const dotsDiv = document.createElement('div');
+            dotsDiv.className = 'cal-dots';
+            const MAX_DOTS = 6;
+            reservations.slice(0, MAX_DOTS).forEach(r => {
+                const dot = document.createElement('span');
+                dot.className = `cal-dot ${getCalInstClass(r.instituto)}`;
+                dot.title = r.nombres;
+                dotsDiv.appendChild(dot);
+            });
+            if (reservations.length > MAX_DOTS) {
+                const more = document.createElement('span');
+                more.style.cssText = 'font-size:0.6rem;color:#888;align-self:center;';
+                more.textContent = `+${reservations.length - MAX_DOTS}`;
+                dotsDiv.appendChild(more);
+            }
+            cell.appendChild(dotsDiv);
+        }
+
+        cell.addEventListener('click', () => {
+            // Remove previous selected
+            document.querySelectorAll('.cal-cell.selected').forEach(c => c.classList.remove('selected'));
+            cell.classList.add('selected');
+            renderDayPanel(day, reservations);
+        });
+
+        grid.appendChild(cell);
+    }
+}
+
+function renderDayPanel(day, reservations) {
+    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    document.getElementById('cal-day-title').textContent =
+        `${String(day).padStart(2, '0')} de ${months[calCurrentMonth]} ${calCurrentYear} — ${reservations.length} reserva(s)`;
+
+    const list = document.getElementById('cal-day-list');
+
+    if (reservations.length === 0) {
+        list.innerHTML = '<p style="color:#aaa; text-align:center; margin-top:40px; font-size:0.9rem;">Sin reservas para este día</p>';
+        return;
+    }
+
+    // Sort by hour
+    const sorted = [...reservations].sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
+
+    list.innerHTML = sorted.map(r => {
+        const instCls = getCalInstClass(r.instituto);
+        const statusColors = {
+            'Programada': '#3498db', 'Realizada': '#2ecc71',
+            'Cancelada': '#e74c3c', 'No asistió': '#95a5a6', 'Reprogramada': '#f1c40f'
+        };
+        const stColor = statusColors[r.estado] || '#aaa';
+        return `
+            <div class="cal-reservation-card ${instCls}" onclick="openModal('${r.id}')">
+                <div class="cal-res-name">${r.nombres}</div>
+                <div class="cal-res-meta">
+                    <i class="far fa-clock" style="color:#999;"></i> ${r.hora}
+                    <span style="color:${stColor}; font-weight:600; font-size:0.8rem;">${r.estado}</span>
+                </div>
+                <span class="cal-res-inst ${instCls}">${r.instituto || '—'}</span>
+            </div>`;
+    }).join('');
+}
+
+// Re-render calendar when filters change (hook into updateDashboard)
+const _origUpdateDashboard = updateDashboard;
+window.updateDashboard = function () {
+    _origUpdateDashboard();
+    if (document.getElementById('view-calendar').style.display !== 'none') {
+        renderCalendarGrid();
+    }
+};

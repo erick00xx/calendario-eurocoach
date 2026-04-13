@@ -99,8 +99,18 @@
             </div>
         </section>
 
+        <!-- View Toggle -->
+        <div class="view-toggle-bar">
+            <button id="btn-view-list" class="view-toggle-btn active" onclick="switchView('list')">
+                <i class="fas fa-list"></i> Vista Lista
+            </button>
+            <button id="btn-view-cal" class="view-toggle-btn" onclick="switchView('calendar')">
+                <i class="fas fa-calendar-alt"></i> Vista Calendario
+            </button>
+        </div>
+
         <!-- Table Section -->
-        <section class="table-section">
+        <section class="table-section" id="view-list">
             <div class="table-responsive">
                 <table class="admin-table" id="admin-table">
                     <thead>
@@ -119,13 +129,39 @@
                 </table>
             </div>
         </section>
+
+        <!-- Calendar View Section -->
+        <section id="view-calendar" class="cal-view-section" style="display:none;">
+            <div class="cal-view-layout">
+                <div class="cal-grid-panel">
+                    <div class="cal-nav">
+                        <button class="cal-nav-btn" onclick="calPrevMonth()"><i
+                                class="fas fa-chevron-left"></i></button>
+                        <span id="cal-month-label" class="cal-month-label"></span>
+                        <button class="cal-nav-btn" onclick="calNextMonth()"><i
+                                class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div class="cal-week-headers">
+                        <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span>
+                    </div>
+                    <div id="cal-grid" class="cal-grid"></div>
+                </div>
+                <div class="cal-side-panel">
+                    <div id="cal-day-title" class="cal-day-title">Selecciona un d&iacute;a</div>
+                    <div id="cal-day-list" class="cal-day-list">
+                        <p style="color:#aaa; text-align:center; margin-top:40px;">Haz clic en un d&iacute;a del
+                            calendario para ver las reservas</p>
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
 
     <!-- Management Modal -->
     <div id="management-modal" class="modal-overlay hidden">
         <div class="modal-content management-modal-content">
             <div class="modal-header">
-                <h2 id="modal-title">Detalles de la Reserva</h2>
+                <h2 id="modal-title">Detalles de la Reserva <span class="subtitle" id="modal-subtitle"></span></h2>
                 <button class="close-modal-btn" onclick="closeModal('management-modal')">&times;</button>
             </div>
 
@@ -136,7 +172,7 @@
                 <button class="tab-btn" data-tab="tab-sesion"><i class="fas fa-clipboard-list"></i> Inf. de la
                     Sesión</button>
                 <button class="tab-btn" data-tab="tab-reprograma"><i class="fas fa-calendar-alt"></i>
-                    Reprogramación</button>
+                    Reprogramar / Cancelar</button>
                 <button class="tab-btn" data-tab="tab-recordatorio"><i class="fas fa-envelope"></i>
                     Recordatorio</button>
             </div>
@@ -144,16 +180,18 @@
             <div class="modal-body">
                 <!-- TAB 1: Alumno -->
                 <div id="tab-alumno" class="tab-content active">
-                    <div class="info-grid" id="alumno-info">
+                    <div id="alumno-info">
                         <!-- Llenado por JS -->
                     </div>
                     <!-- Historial Citas -->
                     <h4
-                        style="margin-top: 20px; font-size: 1rem; color: var(--primary-dark); border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                        style="margin-top: 20px; font-size: 1rem; color: var(--primary); border-bottom: 1px solid #e1d8f1; padding-bottom: 5px;">
                         Historial de Sesiones</h4>
                     <div id="alumno-historial" style="margin-top:10px; max-height: 200px; overflow-y: auto;"></div>
 
-                    <div class="modal-footer-actions">
+                    <div class="modal-footer-actions" style="justify-content: space-between;">
+                        <button class="btn-danger" onclick="deleteCurrentRecord()"><i class="fas fa-trash-alt"></i>
+                            Eliminar Ficha Completa</button>
                         <button class="btn-primary" onclick="openEditStudentModal()"><i class="fas fa-edit"></i> Editar
                             Datos de Alumno</button>
                     </div>
@@ -168,9 +206,7 @@
                                 <select id="ses-estado" class="form-control">
                                     <option value="Programada">Programada</option>
                                     <option value="Realizada">Realizada</option>
-                                    <option value="Cancelada">Cancelada</option>
                                     <option value="No asistió">No asistió</option>
-                                    <option value="Reprogramada">Reprogramada</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -255,28 +291,46 @@
                         <button type="button" class="btn-warning" onclick="processReschedule()" id="btn-reprogramar"
                             disabled><i class="fas fa-calendar-check"></i> Ejecutar Reprogramación</button>
                     </div>
+
+                    <div
+                        style="background: rgba(231, 76, 60, 0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(231, 76, 60, 0.2); margin-top: 25px;">
+                        <h4 style="color: #e74c3c; margin-top: 0; margin-bottom: 10px;"><i class="fas fa-ban"></i>
+                            Cancelar Cita</h4>
+                        <p style="font-size: 0.9rem; color: #555; margin-bottom: 15px;">Al cancelar, se cambiará el
+                            estado a "Cancelada", no aparecerá en el tablero principal y se liberará su espacio
+                            reservado en Google Calendar. El registro se conservará como historial.</p>
+                        <div class="modal-footer-actions" style="margin-top:0; padding-top:0; border:none;">
+                            <button type="button" class="btn-danger" onclick="cancelCurrentRecord()"><i
+                                    class="fas fa-calendar-times"></i> Cancelar y Liberar Fecha</button>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Tab 4: Enviar Recordatorio -->
+                <!-- Tab 4: Recordatorio -->
                 <div id="tab-recordatorio" class="tab-content">
-                    <div class="form-group">
-                        <label>Asunto del Correo:</label>
-                        <input type="text" id="email-subject" class="form-control"
-                            value="Recordatorio de Sesión de Coaching - EUROCOACH">
-                    </div>
-                    <div class="form-group">
-                        <label>Cuerpo del Mensaje (Personalizado):</label>
-                        <textarea id="email-body" class="form-control"
-                            rows="5">Hola, te recordamos que tienes una sesión programada para pronto. Por favor ingresa a tiempo usando el link.</textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Links Adjuntos (Opcional):</label>
-                        <input type="text" id="email-links" class="form-control"
-                            placeholder="https://zoom.us/j/12345 (Título: Enlace de Zoom)">
-                    </div>
-                    <div class="modal-footer-actions">
-                        <button type="button" class="btn-primary" onclick="sendReminderEmail()"><i
-                                class="fas fa-paper-plane"></i> Enviar Recordatorio</button>
+                    <div
+                        style="background: rgba(49, 27, 84, 0.03); padding: 15px; border-radius: 8px; border: 1px solid #e1d8f1; margin-bottom: 25px;">
+                        <h4 style="color: var(--primary); margin-top: 0; margin-bottom: 15px;"><i
+                                class="fas fa-paper-plane"></i> Enviar Recordatorio</h4>
+                        <div class="form-group">
+                            <label>Asunto del Correo:</label>
+                            <input type="text" id="email-subject" class="form-control"
+                                value="Recordatorio de Sesión de Coaching - EUROCOACH">
+                        </div>
+                        <div class="form-group">
+                            <label>Cuerpo del Mensaje (Personalizado):</label>
+                            <textarea id="email-body" class="form-control"
+                                rows="5">Hola, te recordamos que tienes una sesión programada para pronto. Por favor ingresa a tiempo usando el link.</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Links Adjuntos (Opcional):</label>
+                            <input type="text" id="email-links" class="form-control"
+                                placeholder="https://meet.google.com/123-456-789 (Título: Enlace Meet)">
+                        </div>
+                        <div class="modal-footer-actions" style="margin-top: 10px; padding-top: 0; border: none;">
+                            <button type="button" class="btn-primary" onclick="sendReminderEmail()"><i
+                                    class="fas fa-paper-plane"></i> Enviar Recordatorio</button>
+                        </div>
                     </div>
                 </div>
             </div>

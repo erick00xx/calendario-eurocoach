@@ -53,6 +53,8 @@ function doPost(e) {
       result = sendReminderAction(data);
     } else if (action === 'uploadImage') {
       result = uploadImageDrive(data);
+    } else if (action === 'deleteRecord') {
+      result = deleteRecord(data);
     } else {
       result = createReservation(data);
     }
@@ -231,18 +233,17 @@ function createReservation(data) {
   const startTime = new Date(year, parseInt(month)-1, day, hour, 0, 0);
   const endTime = new Date(year, parseInt(month)-1, day, hour + 1, 0, 0);
   
-  // 1. Crear evento en Google Calendar
+  const resId = generateId();
+  
+  // 1. Crear evento en Google Calendar y linkear ID Interno
   const cal = CalendarApp.getDefaultCalendar();
   const event = cal.createEvent(`Reserva EUROCOACH - ${nombres}`, startTime, endTime, {
-    description: `Reserva para: ${nombres}\nCorreo: ${correo}\nTeléfono: ${telefono}\nInstituto: ${instUniv}\nPrograma: ${programa}\nMotivo: ${motivo}`
+    description: `Reserva para: ${nombres}\nCorreo: ${correo}\nTeléfono: ${telefono}\nInstituto: ${instUniv}\nPrograma: ${programa}\nMotivo: ${motivo}\n\n[ID Reserva: ${resId}]`
   });
-  const eventId = event.getId();
   
   // 2. Guardar en Sheets
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
   const now = new Date();
-  
-  const resId = generateId();
   
   const ampm = hour >= 12 ? 'PM' : 'AM';
   const hDisplay = (hour % 12 || 12) + ':00 ' + ampm;
@@ -282,7 +283,7 @@ function createReservation(data) {
   ]);
   
   // 3. Enviar correo de confirmación
-  sendConfirmationEmail(correo, nombres, dateStr, hDisplay, instUniv, resId, eventId);
+  sendConfirmationEmail(correo, nombres, dateStr, hDisplay, instUniv, resId);
   
   return { success: true, message: 'Reserva confirmada con éxito.' };
 }
@@ -290,29 +291,38 @@ function createReservation(data) {
 // ----------------------------------------------------
 // Envío de correo
 // ----------------------------------------------------
-function sendConfirmationEmail(correo, nombres, fecha, hora, instituto, resId, eventId) {
+function sendConfirmationEmail(correo, nombres, fecha, hora, instituto, resId, isReschedule = false, oldFecha = null, oldHora = null) {
   // Ajuste de color según institución pseudo
-  let color = '#4a90e2';
-  if(instituto.toLowerCase().includes('empresa')) color = '#F28C28'; // Soft orange
-  else if(instituto.toLowerCase().includes('blackwell')) color = '#333333'; // Soft black
-  else if(instituto.toLowerCase().includes('neumann')) color = '#9b59b6'; // Soft purple
-  else if(instituto.toLowerCase().includes('autónoma')) color = '#e74c3c'; // Soft red
+  let color = '#311b54'; // Eurocoach brand purple default
+  if(instituto.toLowerCase().includes('empresa')) color = '#F28C28'; 
+  else if(instituto.toLowerCase().includes('blackwell')) color = '#003c8f'; 
+  else if(instituto.toLowerCase().includes('neumann')) color = '#7b2282'; 
+  else if(instituto.toLowerCase().includes('autónoma')) color = '#e3000f'; 
   
   const scriptUrl = ScriptApp.getService().getUrl();
   const cancelLink = `${scriptUrl}?action=cancel&id=${resId}`;
   
+  let headerTitle = isReschedule ? "Sesión Reprogramada: EUROCOACH" : "Reserva Confirmada: EUROCOACH";
+  let bodyTitle = isReschedule ? `Tu sesión de coaching con <strong>${instituto}</strong> ha sido reprogramada.` : `Tu sesión de coaching con <strong>${instituto}</strong> ha sido reservada correctamente.`;
+  
+  let oldInfoHtml = '';
+  if (isReschedule) {
+      oldInfoHtml = `<p style="color:#e74c3c; font-size:0.9rem; margin-top:0;"><i>Anteriormente programada para: ${oldFecha} a las ${oldHora}</i></p>`;
+  }
+  
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
       <div style="background-color: ${color}; color: white; padding: 20px; text-align: center;">
-        <h2>Reserva Confirmada: EUROCOACH</h2>
+        <h2>${headerTitle}</h2>
       </div>
       <div style="padding: 20px; color: #333;">
         <p>Hola <strong>${nombres}</strong>,</p>
-        <p>Tu sesión de coaching con <strong>${instituto}</strong> ha sido reservada correctamente.</p>
+        <p>${bodyTitle}</p>
+        ${oldInfoHtml}
         <br>
-        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
-           <p style="margin: 0;">📅 <strong>Fecha:</strong> ${fecha}</p>
-           <p style="margin: 5px 0 0 0;">⏰ <strong>Hora:</strong> ${hora}</p>
+        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 5px solid #06c0cf;">
+           <p style="margin: 0; font-size:1.1rem;">📅 <strong>Nueva Fecha:</strong> ${fecha}</p>
+           <p style="margin: 5px 0 0 0; font-size:1.1rem;">⏰ <strong>Hora:</strong> ${hora}</p>
         </div>
         <br>
         <p>Si deseas cancelar tu cita, por favor haz click en el siguiente botón:</p>
@@ -327,14 +337,63 @@ function sendConfirmationEmail(correo, nombres, fecha, hora, instituto, resId, e
   MailApp.sendEmail({
     to: correo,
     cc: Session.getActiveUser().getEmail(),
-    subject: `Confirmación de Reserva EUROCOACH - ${fecha} ${hora}`,
+    subject: isReschedule ? `Recalendarización EUROCOACH - ${fecha} ${hora}` : `Confirmación de Reserva EUROCOACH - ${fecha} ${hora}`,
     htmlBody: htmlBody
   });
 }
 
+function freeCalendarSlot(dateStrObj, hourStr, nombres, resId) {
+  if (!dateStrObj || !hourStr || !nombres) return;
+  try {
+    const cal = CalendarApp.getDefaultCalendar();
+    
+    let dateStr = '';
+    if (dateStrObj instanceof Date) {
+      dateStr = Utilities.formatDate(dateStrObj, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    } else {
+      dateStr = dateStrObj.toString();
+    }
+    
+    let y, m, d;
+    if (dateStr.includes('/')) {
+        let parts = dateStr.split('/');
+        if (parts[2].length === 4) { y = parts[2]; m = parts[1]; d = parts[0]; }
+        else { y = parts[0]; m = parts[1]; d = parts[2]; }
+    } else {
+        let parts = dateStr.split('-');
+        y = parts[0]; m = parts[1]; d = parts[2];
+    }
+    
+    let dInt = parseInt(d);
+    let mInt = parseInt(m);
+    let yInt = parseInt(y);
+    
+    // Búsqueda extremadamente holgada (-2 y +2 días) para burlar completamente cualquier zona horaria o UTC local del calendario
+    const start = new Date(yInt, mInt-1, dInt - 2, 0, 0, 0);
+    const end = new Date(yInt, mInt-1, dInt + 2, 23, 59, 59);
+    
+    const evts = cal.getEvents(start, end);
+    evts.forEach(e => {
+        try {
+            let desc = e.getDescription() || '';
+            let title = e.getTitle() || '';
+            
+            // Match Exacto y Único por ID de Reserva incrustado en el evento
+            if (resId && desc.includes(resId.toString().trim())) {
+                e.deleteEvent();
+            }
+        } catch(ex) {
+            // Continuar con los demás si uno falla (ejem: no hay permiso sobre eventos de feriados)
+        }
+    });
+  } catch(err) {
+      console.log('Error deleting calendar event: ' + err);
+  }
+}
+
 function cancelReservation(id) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
-  const data = sheet.getDataRange().getValues();
+  const data = sheet.getDataRange().getDisplayValues();
   
   let found = false;
   let htmlResult = '';
@@ -343,6 +402,9 @@ function cancelReservation(id) {
     if (data[i][0] === id) {
       // Marcar como Cancelada en columna N (índice 13 -> Columna 14 para getRange)
       sheet.getRange(i + 1, 14).setValue("Cancelada");
+      
+      // Free the slot using Col A (0) Which is the resId
+      freeCalendarSlot(data[i][9], data[i][10], data[i][2], data[i][0]);
       
       htmlResult = `
         <div style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
@@ -374,28 +436,25 @@ function cancelReservation(id) {
 // ----------------------------------------------------
 function getAllReservations() {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
-  const data = sheet.getDataRange().getValues();
+  const data = sheet.getDataRange().getDisplayValues();
   if (data.length <= 1) return [];
   
-  const h = data[0];
   const list = [];
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     
-    // Parse Dates cleanly to strings
-    let created = row[1];
-    if (created instanceof Date) {
-        created = Utilities.formatDate(created, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
-    }
-    
-    let reservaDate = row[9];
-    if (reservaDate instanceof Date) {
-        reservaDate = Utilities.formatDate(reservaDate, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    // Al usar getDisplayValues, ya no necesitamos parsear Fechas con formatDate
+    let created = row[1] || '';
+    let reservaDate = row[9] || '';
+    // A veces DisplayValues da fechas con guiones dependiendo de la configuración de celda. Reemplazamos si fuera necesario a dd/MM/yyyy
+    if(reservaDate.includes('-') && reservaDate.split('-')[0].length === 4) {
+       const p = reservaDate.split('-');
+       reservaDate = `${p[2]}/${p[1]}/${p[0]}`;
     }
     
     list.push({
       id: row[0] ? row[0].toString() : '',
-      creado: created ? created.toString() : '',
+      creado: created.toString(),
       nombres: row[2] ? row[2].toString() : '',
       correo: row[3] ? row[3].toString() : '',
       telefono: row[4] ? row[4].toString().replace("'", "") : '',
@@ -403,7 +462,7 @@ function getAllReservations() {
       dedicacion: row[6] ? row[6].toString() : '',
       instituto: row[7] ? row[7].toString() : '',
       programa: row[8] ? row[8].toString() : '',
-      fecha: reservaDate ? reservaDate.toString() : '',
+      fecha: reservaDate.toString(),
       hora: row[10] ? row[10].toString() : '',
       motivo: row[11] ? row[11].toString() : '',
       sesionNumero: row[12] ? row[12].toString() : '',
@@ -423,11 +482,12 @@ function getAllReservations() {
 
 function updateReservationData(payload) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
-  const data = sheet.getDataRange().getValues();
+  const data = sheet.getDataRange().getDisplayValues();
   
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === payload.id) {
       const rowIndex = i + 1;
+      const oldState = data[i][13];
       sheet.getRange(rowIndex, 14).setValue(payload.estado);
       sheet.getRange(rowIndex, 13).setValue(payload.sesionNumero);
       sheet.getRange(rowIndex, 15).setValue(payload.problema);
@@ -438,6 +498,12 @@ function updateReservationData(payload) {
       sheet.getRange(rowIndex, 20).setValue(payload.nivelCompromiso);
       sheet.getRange(rowIndex, 21).setValue(payload.notas);
       sheet.getRange(rowIndex, 22).setValue(payload.capturas);
+      
+      if ((payload.estado === 'Cancelada' || payload.estado === 'Reprogramada' || payload.estado === 'No asistió') 
+           && oldState !== payload.estado) {
+         freeCalendarSlot(data[i][9], data[i][10], data[i][2], data[i][0]);
+      }
+      
       return { success: true };
     }
   }
@@ -446,7 +512,7 @@ function updateReservationData(payload) {
 
 function updateStudentData(payload) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
-  const data = sheet.getDataRange().getValues();
+  const data = sheet.getDataRange().getDisplayValues();
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === payload.id) {
       const rowIndex = i + 1;
@@ -464,7 +530,7 @@ function updateStudentData(payload) {
 
 function rescheduleReservation(payload) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
-  const data = sheet.getDataRange().getValues();
+  const data = sheet.getDataRange().getDisplayValues();
   
   let oldRow = null;
   let rowIndex = -1;
@@ -484,6 +550,13 @@ function rescheduleReservation(payload) {
      sheet.getRange(rowIndex, 21).setValue(currentNotas + " [Reprogramó por: " + payload.motivoReprogramacion + "]");
   }
   
+  // Free old Calendar Event! using Event resId in Col 0
+  freeCalendarSlot(oldRow[9], oldRow[10], oldRow[2], oldRow[0]);
+  
+  // Parse old oldF to proper string
+  let oldF = oldRow[9];
+  if(oldF instanceof Date) oldF = Utilities.formatDate(oldF, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  
   // Create New Reservation using old data but new Date/Time
   const createPayload = {
     nombre: oldRow[2],
@@ -497,7 +570,61 @@ function rescheduleReservation(payload) {
     hora: payload.nuevaHora,
     motivo: payload.motivoReprogramacion || "Reprogramación de Sesión"
   };
-  return createReservation(createPayload);
+  return createReservationModified(createPayload, true, oldF, oldRow[10]);
+}
+
+function createReservationModified(data, isReschedule, oldFecha, oldHora) {
+  const correo = data.correo ? data.correo.trim() : '';
+  const nombres = data.nombre ? data.nombre.trim() : '';
+  const telefono = data.telefono ? data.telefono.trim() : '';
+  const edad = data.edad ? data.edad.toString().trim() : '';
+  const dedicacion = data.dedicacion ? data.dedicacion.trim() : '';
+  const instUniv = data.instituto ? data.instituto.trim() : '';
+  const programa = data.programa ? data.programa.trim() : '';
+  const motivo = data.motivo ? data.motivo.trim() : '';
+  
+  const dateStr = data.fecha; 
+  const hour = parseInt(data.hora); 
+  const [year, month, day] = dateStr.split('-');
+  
+  const resId = generateId();
+  
+  const startTime = new Date(year, parseInt(month)-1, day, hour, 0, 0);
+  const endTime = new Date(year, parseInt(month)-1, day, hour + 1, 0, 0);
+  
+  const cal = CalendarApp.getDefaultCalendar();
+  const event = cal.createEvent(`Reserva EUROCOACH - ${nombres}`, startTime, endTime, {
+    description: `Reserva para: ${nombres}\nCorreo: ${correo}\nTeléfono: ${telefono}\nInstituto: ${instUniv}\nPrograma: ${programa}\nMotivo: ${motivo}\n\n[ID Reserva: ${resId}]`
+  });
+  
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
+  const now = new Date();
+  
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hDisplay = (hour % 12 || 12) + ':00 ' + ampm;
+  
+  let sessionNumber = 1;
+  const existingData = sheet.getDataRange().getValues();
+  for (let i = existingData.length - 1; i >= 1; i--) {
+     if (existingData[i][3] && existingData[i][3].toString().trim().toLowerCase() === correo.toLowerCase()) {
+         let rawNum = existingData[i][12] ? existingData[i][12].toString() : '0';
+         let matchNum = rawNum.match(/\d+/);
+         let lastNum = matchNum ? parseInt(matchNum[0]) : 0;
+         sessionNumber = lastNum + 1;
+         break;
+     }
+  }
+  const sesionFormatted = "Sesión " + sessionNumber;
+  
+  sheet.appendRow([
+    resId, now.toLocaleString('es-ES', { timeZone: 'America/Lima' }), nombres, correo, "'" + telefono,
+    edad, dedicacion, instUniv, programa, dateStr, hDisplay, motivo, sesionFormatted, "Programada",
+    "", "", "", "", "", "", "", ""
+  ]);
+  
+  sendConfirmationEmail(correo, nombres, dateStr, hDisplay, instUniv, resId, isReschedule, oldFecha, oldHora);
+  
+  return { success: true, message: 'Reserva reprogramada con éxito.' };
 }
 
 // ----------------------------------------------------
@@ -519,6 +646,21 @@ function uploadImageDrive(payload) {
   } catch (error) {
     return { success: false, message: error.toString() };
   }
+}
+
+function deleteRecord(payload) {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
+  const data = sheet.getDataRange().getDisplayValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === payload.id) {
+       // Also free calendar exactly before deleting row! using Col 0 (resId)
+       freeCalendarSlot(data[i][9], data[i][10], data[i][2], data[i][0]);
+       
+       sheet.deleteRow(i + 1);
+       return { success: true };
+    }
+  }
+  return { success: false, message: "No encontrado" };
 }
 
 
