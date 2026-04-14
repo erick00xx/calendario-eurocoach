@@ -202,6 +202,17 @@ body {
     color: var(--text-muted);
 }
 
+.monthly-quota-info {
+    margin-top: 0.35rem;
+    font-size: 0.88rem !important;
+    font-weight: 600;
+    color: var(--primary-dark) !important;
+}
+
+.monthly-quota-info.low {
+    color: #c0392b !important;
+}
+
 /* Calendar Styling */
 .date-tabs {
     display: flex;

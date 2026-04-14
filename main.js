@@ -1,6 +1,6 @@
 // CONFIGURACIÓN DE LA URL DE APPS SCRIPT
 // REEMPLAZAR ESTA CADENA CON LA URL PUBLICADA COMO APLICACIÓN WEB DE APPS SCRIPT
-const API_URL = "https://script.google.com/macros/s/AKfycbxc4XJ7IGMunfbxvC_qc-5NryuN2rqNFiuN3nNgqUc8R-Op4HAX2up7qhL1OZ-C9mznRA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxtEgR-tOxgUJI5-nYQk-s7GQxneuwcNAx5-CBoGTsXEIwQXsjRzf_ZylKIg_vNfqN5Sg/exec";
 
 const tenants = {
     'instituto_empresa': {
@@ -77,6 +77,7 @@ let currentTenant = null;
 let programsData = [];
 let availableSlots = {};
 let profilesData = []; // Store the user profiles
+let monthlyQuotaInfo = null;
 let iti = null; // Intl-tel-input instance
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -117,6 +118,7 @@ function initPhoneInput() {
     iti = window.intlTelInput(input, {
         initialCountry: "auto",
         separateDialCode: true,
+        autoPlaceholder: false,
         geoIpLookup: function (success, failure) {
             fetch("https://ipapi.co/json")
                 .then(res => res.json())
@@ -199,7 +201,9 @@ async function loadExternalData() {
         programsData = mockProgramsData();
         availableSlots = mockAvailabilityData();
         profilesData = [{ correo: 'admin@test.com', nombre: 'Admin Demo', telefono: '51987654321', edad: 30, dedicacion: 'Ingeniero', instituto: 'Jhonn Vonn Neumann', programa: 'ADMINISTRACIÓN' }];
+        monthlyQuotaInfo = null;
         setupProgramsData();
+        renderMonthlyQuotaInfo();
         renderCalendar();
         showLoader(false);
         showWelcomeModal();
@@ -215,8 +219,10 @@ async function loadExternalData() {
         programsData = json.programs || [];
         availableSlots = json.slots || {};
         profilesData = json.profiles || [];
+        monthlyQuotaInfo = json.monthlyQuota || null;
 
         setupProgramsData();
+        renderMonthlyQuotaInfo();
         renderCalendar();
     } catch (e) {
         console.error(e);
@@ -225,6 +231,26 @@ async function loadExternalData() {
         showLoader(false);
         showWelcomeModal();
     }
+}
+
+function renderMonthlyQuotaInfo() {
+    const el = document.getElementById('monthly-quota-info');
+    if (!el) return;
+
+    if (!monthlyQuotaInfo || typeof monthlyQuotaInfo.restantes !== 'number') {
+        el.textContent = '';
+        el.classList.add('hidden');
+        el.classList.remove('low');
+        return;
+    }
+
+    const restantes = monthlyQuotaInfo.restantes;
+    const maximo = typeof monthlyQuotaInfo.maximo === 'number' ? monthlyQuotaInfo.maximo : 0;
+    const claveMes = monthlyQuotaInfo.claveMes || 'mes actual';
+
+    el.textContent = `Cupos restantes (${claveMes}): ${restantes} de ${maximo}`;
+    el.classList.remove('hidden');
+    el.classList.toggle('low', restantes <= 0);
 }
 
 // ==========================================

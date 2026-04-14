@@ -16,7 +16,8 @@ function doGet(e) {
       result = {
         programs: getPrograms(),
         slots: obtenerDisponibilidad(tenant),
-        profiles: getLatestProfiles()
+        profiles: getLatestProfiles(),
+        monthlyQuota: obtenerCupoMensualActual(tenant)
       };
     } else if (action === 'getPrograms') {
       result = getPrograms();
@@ -291,6 +292,113 @@ function normalizarFechaNoDisponibleTexto(valor) {
   return `${anioInt.toString().padStart(4, '0')}-${mesInt.toString().padStart(2, '0')}-${diaInt.toString().padStart(2, '0')}`;
 }
 
+function obtenerAnioMesDesdeFechaTexto(valor) {
+  if (valor === null || valor === undefined) return null;
+  const texto = valor.toString().trim();
+  if (!texto) return null;
+
+  let anio;
+  let mes;
+  let dia;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    [anio, mes, dia] = texto.split('-');
+  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(texto)) {
+    [dia, mes, anio] = texto.split('/');
+  } else if (/^\d{2}-\d{2}-\d{4}$/.test(texto)) {
+    [dia, mes, anio] = texto.split('-');
+  } else if (/^\d{4}\/\d{2}\/\d{2}$/.test(texto)) {
+    [anio, mes, dia] = texto.split('/');
+  } else {
+    return null;
+  }
+
+  const anioInt = parseInt(anio, 10);
+  const mesInt = parseInt(mes, 10);
+  if (isNaN(anioInt) || isNaN(mesInt)) return null;
+
+  return {
+    anio: anioInt,
+    mes: mesInt,
+    claveMes: `${anioInt.toString().padStart(4, '0')}-${mesInt.toString().padStart(2, '0')}`
+  };
+}
+
+function estadoCuentaParaCupo(estado) {
+  const estadoNormalizado = normalizarTextoNoDisponible(estado);
+  return estadoNormalizado === 'programada' || estadoNormalizado === 'realizada';
+}
+
+function obtenerMaximosReservasPorAmbito() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('MaxReservas');
+  const mapa = {};
+  if (!sheet || sheet.getLastRow() < 2) return mapa;
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getDisplayValues();
+  data.forEach(row => {
+    const ambito = normalizarAmbitoNoDisponible(row[0]);
+    const maximo = parseInt((row[1] || '').toString().trim(), 10);
+    if (!isNaN(maximo) && maximo >= 0) {
+      mapa[ambito] = maximo;
+    }
+  });
+
+  return mapa;
+}
+
+function contarReservasPorAmbitoYMes() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Data');
+  const conteos = {};
+  if (!sheet || sheet.getLastRow() < 2) return conteos;
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 14).getDisplayValues();
+  data.forEach(row => {
+    const fechaInfo = obtenerAnioMesDesdeFechaTexto(row[9]); // Col J
+    if (!fechaInfo) return;
+
+    const estado = row[13]; // Col N
+    if (!estadoCuentaParaCupo(estado)) return;
+
+    const ambito = normalizarAmbitoNoDisponible(row[7]); // Col H
+    const key = `${ambito}|${fechaInfo.claveMes}`;
+    conteos[key] = (conteos[key] || 0) + 1;
+  });
+
+  return conteos;
+}
+
+function obtenerCupoMensualPorAmbito(ambito, anio, mes, cacheMaximos, cacheConteos) {
+  const ambitoNormalizado = normalizarAmbitoNoDisponible(ambito);
+  const claveMes = `${anio.toString().padStart(4, '0')}-${mes.toString().padStart(2, '0')}`;
+
+  const maximos = cacheMaximos || obtenerMaximosReservasPorAmbito();
+  const conteos = cacheConteos || contarReservasPorAmbitoYMes();
+
+  const maximo = Object.prototype.hasOwnProperty.call(maximos, ambitoNormalizado) ? maximos[ambitoNormalizado] : 0;
+  const usadas = conteos[`${ambitoNormalizado}|${claveMes}`] || 0;
+  const restantes = Math.max(0, maximo - usadas);
+
+  return {
+    ambito: ambitoNormalizado,
+    anio,
+    mes,
+    claveMes,
+    maximo,
+    usadas,
+    restantes
+  };
+}
+
+function obtenerCupoMensualActual(tenant) {
+  const now = new Date();
+  const tz = Session.getScriptTimeZone();
+  const anio = parseInt(Utilities.formatDate(now, tz, 'yyyy'), 10);
+  const mes = parseInt(Utilities.formatDate(now, tz, 'MM'), 10);
+  const ambito = obtenerAmbitoDesdeTenant(tenant);
+
+  return obtenerCupoMensualPorAmbito(ambito, anio, mes);
+}
+
 function slotBloqueadoPorNoDisponible(inicioSlot, finSlot, tenant, reglas) {
   if (!(inicioSlot instanceof Date) || !(finSlot instanceof Date)) return false;
 
@@ -318,6 +426,8 @@ function obtenerDisponibilidad(tenant = '') {
 
   const reglasNoDisponible = obtenerReglasNoDisponible();
   const tenantAmbito = obtenerAmbitoDesdeTenant(tenant);
+  const maximosCache = obtenerMaximosReservasPorAmbito();
+  const conteosCache = contarReservasPorAmbitoYMes();
   const events = CalendarApp.getDefaultCalendar().getEvents(now, endDate);
 
   // Mapa de fechas ocupadas usando la TZ del script para no cruzar días por desfases UTC.
@@ -341,6 +451,11 @@ function obtenerDisponibilidad(tenant = '') {
     if (dayOfWeek !== 0) {
       const dateKey = obtenerClaveFecha(checkDate);
       availableDates[dateKey] = [];
+
+      const cupoMes = obtenerCupoMensualPorAmbito(tenantAmbito, checkDate.getFullYear(), checkDate.getMonth() + 1, maximosCache, conteosCache);
+      if (cupoMes.restantes <= 0) {
+        continue;
+      }
 
       const currentBooked = bookedSlots[dateKey] || [];
 
@@ -397,6 +512,11 @@ function registrarReserva(data) {
   const endTime = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hour + 1, 0, 0);
   const reglasNoDisponible = obtenerReglasNoDisponible();
   const tenantAmbito = obtenerAmbitoDesdeTenant(instUniv);
+  const cupoMes = obtenerCupoMensualPorAmbito(tenantAmbito, parseInt(year, 10), parseInt(month, 10));
+
+  if (cupoMes.restantes <= 0) {
+    return { success: false, error: `No hay cupos disponibles para ${cupoMes.claveMes}.` };
+  }
 
   if (slotBloqueadoPorNoDisponible(startTime, endTime, tenantAmbito, reglasNoDisponible)) {
     return { success: false, error: 'El horario seleccionado no está disponible por una restricción en NoDisponible.' };
@@ -717,6 +837,24 @@ function rescheduleReservation(payload) {
   const nuevaHora = parseInt(payload.nuevaHora, 10);
   const nuevoInicio = new Date(parseInt(nuevoAnio, 10), parseInt(nuevoMes, 10) - 1, parseInt(nuevoDia, 10), nuevaHora, 0, 0);
   const nuevoFin = new Date(parseInt(nuevoAnio, 10), parseInt(nuevoMes, 10) - 1, parseInt(nuevoDia, 10), nuevaHora + 1, 0, 0);
+  const cupoMes = obtenerCupoMensualPorAmbito(oldRow[7], parseInt(nuevoAnio, 10), parseInt(nuevoMes, 10));
+
+  // Si la cita anterior ya contaba en ese mismo mes/ámbito, se libera un cupo al reprogramar.
+  let restantesAjustados = cupoMes.restantes;
+  const oldFechaInfo = obtenerAnioMesDesdeFechaTexto(oldRow[9]);
+  const oldAmbito = normalizarAmbitoNoDisponible(oldRow[7]);
+  if (
+    oldFechaInfo &&
+    oldFechaInfo.claveMes === cupoMes.claveMes &&
+    oldAmbito === cupoMes.ambito &&
+    estadoCuentaParaCupo(oldRow[13])
+  ) {
+    restantesAjustados += 1;
+  }
+
+  if (restantesAjustados <= 0) {
+    return { success: false, message: `No hay cupos disponibles para ${cupoMes.claveMes}.` };
+  }
   if (slotBloqueadoPorNoDisponible(nuevoInicio, nuevoFin, oldRow[7], reglasNoDisponible)) {
     return { success: false, message: 'El nuevo horario está bloqueado por una restricción en NoDisponible.' };
   }
@@ -770,6 +908,10 @@ function createReservationModified(data, isReschedule, oldFecha, oldHora) {
   const startTime = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hour, 0, 0);
   const endTime = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hour + 1, 0, 0);
   const reglasNoDisponible = obtenerReglasNoDisponible();
+  const cupoMes = obtenerCupoMensualPorAmbito(instUniv, parseInt(year, 10), parseInt(month, 10));
+  if (cupoMes.restantes <= 0) {
+    return { success: false, message: `No hay cupos disponibles para ${cupoMes.claveMes}.` };
+  }
   if (slotBloqueadoPorNoDisponible(startTime, endTime, obtenerAmbitoDesdeTenant(instUniv), reglasNoDisponible)) {
     return { success: false, message: 'El nuevo horario está bloqueado por una restricción en NoDisponible.' };
   }

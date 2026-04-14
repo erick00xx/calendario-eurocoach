@@ -98,6 +98,7 @@
                 <div class="section-title">
                     <h2>1. Selecciona tu Cita</h2>
                     <p>Días y horas disponibles para coaching</p>
+                    <p id="monthly-quota-info" class="monthly-quota-info hidden"></p>
                 </div>
 
                 <div class="calendar-wrapper">
@@ -143,7 +144,7 @@
 
                         <div class="form-group fillable">
                             <label for="nombre">Nombres y Apellidos <span class="required">*</span></label>
-                            <input type="text" id="nombre" name="nombre" placeholder="Juan Pérez" required>
+                            <input type="text" id="nombre" name="nombre" required>
                         </div>
 
                         <div class="form-group row-group fillable">
@@ -155,8 +156,7 @@
                             </div>
                             <div class="col">
                                 <label for="edad">Edad <span class="required">*</span></label>
-                                <input type="number" id="edad" name="edad" min="16" max="99" placeholder="Ej. 25"
-                                    required>
+                                <input type="number" id="edad" name="edad" min="16" max="99"required>
                             </div>
                         </div>
 
