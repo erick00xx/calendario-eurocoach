@@ -30,6 +30,49 @@
     <div class="background-decor"></div>
     <div class="background-decor-2"></div>
 
+    <!-- Welcome Modal -->
+    <div id="welcome-modal-overlay" class="welcome-modal-overlay hidden" aria-hidden="true">
+        <section class="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-modal-title">
+            <div class="welcome-modal-header" id="welcome-modal-header">
+                <img id="welcome-modal-logo" src="" alt="Logo" class="welcome-modal-logo">
+                <p class="welcome-modal-kicker">Bienvenid@ al sistema de reservas</p>
+                <h2 id="welcome-modal-title"></h2>
+            </div>
+
+            <div class="welcome-modal-body">
+                <p class="welcome-modal-intro">📋 Antes de agendar, ten en cuenta:</p>
+
+                <div class="welcome-note">
+                    <span class="welcome-note-icon">📧</span>
+                    <div>
+                        <strong>Revisa tu correo electrónico</strong>
+                        <p>Tras reservar tu sesión, recibirás una confirmación por correo. Revisa también Spam/Promociones.</p>
+                    </div>
+                </div>
+
+                <div class="welcome-note">
+                    <span class="welcome-note-icon">📅</span>
+                    <div>
+                        <strong>¿No puedes asistir? Cancela o avisa con anticipación</strong>
+                        <p>Si necesitas cancelar o reprogramar, comunícate con tu Coach con la mayor anticipación posible.</p>
+                    </div>
+                </div>
+
+                <div class="welcome-note">
+                    <span class="welcome-note-icon">🔑</span>
+                    <div>
+                        <strong>Usa siempre el mismo correo electrónico</strong>
+                        <p>Tu correo es tu identificador único para guardar tu historial y hacer seguimiento personalizado.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="welcome-modal-footer">
+                <button type="button" id="welcome-modal-close" class="welcome-modal-close-btn">¡Entendido, ir al calendario! 📆</button>
+            </div>
+        </section>
+    </div>
+
     <!-- New Top Navbar Header -->
     <header class="top-navbar">
         <div class="logo-area">

@@ -12,7 +12,13 @@ const tenants = {
         secondary: '#182a4d', /* Las rayas de los margenes en azul marino */
         hasCategories: false,
         heroTitle: 'Reserva tu Sesión de Coaching',
-        heroSubtitle: 'Acompañamiento personalizado para estudiantes del Instituto de la Empresa'
+        heroSubtitle: 'Acompañamiento personalizado para estudiantes del Instituto de la Empresa',
+        welcomeTheme: {
+            headerBg: 'linear-gradient(135deg, #8a3307 0%, #df6621 100%)',
+            accentColor: '#df6621',
+            cardBg: '#fff7f3',
+            cardBorder: '#f18244'
+        }
     },
     'blackwell': {
         name: 'Blackwell Global University',
@@ -23,7 +29,13 @@ const tenants = {
         secondary: '#003c8f',
         hasCategories: true,
         heroTitle: 'Sesiones de Coaching Académico',
-        heroSubtitle: 'Potenciando tu formación de postgrado en Blackwell Global University'
+        heroSubtitle: 'Potenciando tu formación de postgrado en Blackwell Global University',
+        welcomeTheme: {
+            headerBg: 'linear-gradient(135deg, #061d4a 0%, #2c64b5 100%)',
+            accentColor: '#003c8f',
+            cardBg: '#f0f4ff',
+            cardBorder: '#2c64b5'
+        }
     },
     'neumann': {
         name: 'Jhonn Vonn Neumann',
@@ -34,7 +46,13 @@ const tenants = {
         secondary: '#33b2e3', /* Rayas secundarias celestes en base al logo */
         hasCategories: false,
         heroTitle: 'Agenda tu Sesión de Coaching',
-        heroSubtitle: 'Espacio profesional para tu desarrollo académico en Neumann'
+        heroSubtitle: 'Espacio profesional para tu desarrollo académico en Neumann',
+        welcomeTheme: {
+            headerBg: 'linear-gradient(135deg, #00559c 0%, #7b2282 100%)',
+            accentColor: '#00559c',
+            cardBg: '#f0f8ff',
+            cardBorder: '#3a87c9'
+        }
     },
     'ua_chile': {
         name: 'Universidad Autónoma',
@@ -45,7 +63,13 @@ const tenants = {
         secondary: '#e3000f', /* Rayas separadoras en rojo institucional */
         hasCategories: true,
         heroTitle: 'Reserva tu Sesión de Coaching',
-        heroSubtitle: 'Acompañamiento personalizado para estudiantes de postgrado de la Universidad Autónoma.'
+        heroSubtitle: 'Acompañamiento personalizado para estudiantes de postgrado de la Universidad Autónoma.',
+        welcomeTheme: {
+            headerBg: 'linear-gradient(135deg, #1a1a1a 0%, #3a3a3a 60%, #e3000f 100%)',
+            accentColor: '#e3000f',
+            cardBg: '#fdf5f5',
+            cardBorder: '#e3000f'
+        }
     }
 };
 
@@ -125,6 +149,13 @@ function bindEvents() {
             document.getElementById('autocomplete-list').classList.add('hidden');
         }
     });
+
+    document.getElementById('welcome-modal-close').addEventListener('click', closeWelcomeModal);
+    document.getElementById('welcome-modal-overlay').addEventListener('click', (e) => {
+        if (e.target.id === 'welcome-modal-overlay') {
+            closeWelcomeModal();
+        }
+    });
 }
 
 function initDragScroll(slider) {
@@ -171,6 +202,7 @@ async function loadExternalData() {
         setupProgramsData();
         renderCalendar();
         showLoader(false);
+        showWelcomeModal();
         return;
     }
 
@@ -190,6 +222,7 @@ async function loadExternalData() {
         Swal.fire('Error', 'No se pudieron cargar los datos iniciales del servidor.', 'error');
     } finally {
         showLoader(false);
+        showWelcomeModal();
     }
 }
 
@@ -473,6 +506,25 @@ function showLoader(show, text = 'Cargando...') {
     } else {
         l.classList.remove('active');
     }
+}
+
+// ==========================================
+// Welcome Modal
+// ==========================================
+
+function showWelcomeModal() {
+    if (!currentTenant) return;
+    document.getElementById('welcome-modal-logo').src = currentTenant.logo;
+    document.getElementById('welcome-modal-title').textContent = currentTenant.name;
+    document.getElementById('welcome-modal-header').style.background = currentTenant.welcomeTheme?.headerBg || 'linear-gradient(135deg, #2c3e50 0%, #4a90e2 100%)';
+    document.getElementById('welcome-modal-overlay').classList.remove('hidden');
+    document.getElementById('welcome-modal-overlay').setAttribute('aria-hidden', 'false');
+}
+
+function closeWelcomeModal() {
+    const overlay = document.getElementById('welcome-modal-overlay');
+    overlay.classList.add('hidden');
+    overlay.setAttribute('aria-hidden', 'true');
 }
 
 // ==========================================
