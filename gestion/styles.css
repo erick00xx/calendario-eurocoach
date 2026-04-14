@@ -963,6 +963,8 @@ button[class^="btn-"] {
     border: 1px solid #e8ecf0;
     border-radius: var(--border-radius);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .cal-nav {
@@ -1108,10 +1110,9 @@ button[class^="btn-"] {
     border: 1px solid #e8ecf0;
     border-radius: var(--border-radius);
     overflow: hidden;
-    min-height: 500px;
-    max-height: 620px;
     display: flex;
     flex-direction: column;
+    max-height: 560px;
 }
 
 .cal-day-title {
