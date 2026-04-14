@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzHJ3ToD3dIXJBe-J_GWkZs-Bc_UHgd7Qo8RBJFnsRmcWEMbgImiTmnuMmI6qQ9ifL_rA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbx29MKCBivEqklwhrJA6TMkToCGeGA0RuINMPdKeiYFanapmWuNBnuatLn2MaHAAMQyig/exec";
 
 // Global State
 let allReservations = [];
@@ -722,11 +722,80 @@ async function saveStudentEdit() {
 let selectedReschedDate = null;
 let selectedReschedTime = null;
 
+function parseReservationDateFlexible(dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+
+    const clean = dateStr.trim();
+    if (!clean) return null;
+
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
+        const [day, month, year] = clean.split('/').map(part => parseInt(part, 10));
+        return new Date(year, month - 1, day);
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+        const [year, month, day] = clean.split('-').map(part => parseInt(part, 10));
+        return new Date(year, month - 1, day);
+    }
+
+    return null;
+}
+
+function getAdminRescheduleSlots() {
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 15);
+
+    const bookedSlots = {};
+
+    allReservations.forEach(reservation => {
+        if (reservation.estado !== 'Programada') return;
+
+        const reservationDate = parseReservationDateFlexible(reservation.fecha);
+        if (!reservationDate) return;
+
+        const key = `${reservationDate.getFullYear()}-${String(reservationDate.getMonth() + 1).padStart(2, '0')}-${String(reservationDate.getDate()).padStart(2, '0')}`;
+        const hourMatch = (reservation.hora || '').toString().match(/^(\d{1,2})/);
+        if (!hourMatch) return;
+
+        const hour = parseInt(hourMatch[1], 10);
+        if (!bookedSlots[key]) bookedSlots[key] = [];
+        bookedSlots[key].push(hour);
+    });
+
+    const slotsByDate = {};
+
+    for (let i = 0; i <= 15; i++) {
+        const checkDate = new Date(today);
+        checkDate.setDate(today.getDate() + i);
+
+        if (checkDate.getDay() === 0) continue;
+
+        const key = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+        const currentBooked = bookedSlots[key] || [];
+        const available = [];
+
+        for (let hour = 8; hour <= 18; hour++) {
+            if (i === 0 && checkDate.getHours() >= hour) continue;
+            if (currentBooked.includes(hour)) continue;
+
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const h = hour % 12 || 12;
+            available.push({ hour, label: `${h}:00 ${ampm}` });
+        }
+
+        slotsByDate[key] = available;
+    }
+
+    return slotsByDate;
+}
+
 function renderMiniCalendar() {
     const container = document.getElementById('mini-calendar');
     let tabsHtml = `<div class="date-tabs" style="display:flex; overflow-x:auto; gap:10px; padding-bottom:10px; margin-bottom:10px;">`;
 
-    const dates = Object.keys(systemSlots).sort();
+    const adminSlots = getAdminRescheduleSlots();
+    const dates = Object.keys(adminSlots).sort();
 
     dates.forEach((date, i) => {
         const dObj = new Date(date + "T12:00:00");
@@ -744,6 +813,8 @@ function renderMiniCalendar() {
 
     if (dates.length > 0) {
         selectMiniDate(dates[0], container.querySelector('.date-tab'));
+    } else {
+        document.getElementById('mini-slots').innerHTML = `<div style="grid-column: 1/-1; text-align:center; color:#777; padding:10px 0;">No hay horarios</div>`;
     }
 }
 
@@ -754,7 +825,7 @@ window.selectMiniDate = function (dateStr, elem) {
     selectedReschedTime = null;
     document.getElementById('btn-reprogramar').disabled = true;
 
-    const slots = systemSlots[dateStr] || [];
+    const slots = getAdminRescheduleSlots()[dateStr] || [];
     let slotsHtml = '';
 
     if (slots.length === 0) {
@@ -969,8 +1040,17 @@ function getCalInstClass(inst) {
 function parseReservationDate(dateStr) {
     // Supports DD/MM/YYYY
     if (!dateStr || typeof dateStr !== 'string') return null;
-    const p = dateStr.split('/');
-    if (p.length === 3) return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+        const p = dateStr.split('/');
+        return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const p = dateStr.split('-');
+        return new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+    }
+
     return null;
 }
 

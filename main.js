@@ -1,6 +1,6 @@
 // CONFIGURACIÓN DE LA URL DE APPS SCRIPT
 // REEMPLAZAR ESTA CADENA CON LA URL PUBLICADA COMO APLICACIÓN WEB DE APPS SCRIPT
-const API_URL = "https://script.google.com/macros/s/AKfycbxtEgR-tOxgUJI5-nYQk-s7GQxneuwcNAx5-CBoGTsXEIwQXsjRzf_ZylKIg_vNfqN5Sg/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbx29MKCBivEqklwhrJA6TMkToCGeGA0RuINMPdKeiYFanapmWuNBnuatLn2MaHAAMQyig/exec";
 
 const tenants = {
     'instituto_empresa': {
