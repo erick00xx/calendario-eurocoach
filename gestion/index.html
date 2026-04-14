@@ -276,13 +276,12 @@
 
                 <!-- Tab 3: Reprogramación -->
                 <div id="tab-reprograma" class="tab-content">
-                    <p class="tab-desc">Selecciona una nueva fecha y horario para reprogramar la cita seleccionada. La
-                        reserva actual cambiará automáticamente a estado "Reprogramada" y se creará una nueva reserva.
+                    <p class="tab-desc">Selecciona una nueva fecha y hora disponible para reprogramar, ingrese un motivo, luego haz clic en "Ejecutar Reprogramación".
                     </p>
                     <div class="form-group">
                         <label>Motivo de Reprogramación:</label>
                         <input type="text" id="reprog-motivo" class="form-control"
-                            placeholder="Ejem: Solicitud del alumno por motivos de viaje">
+                            placeholder="Escriba el motivo de reprogramación...">
                     </div>
                     <div id="mini-calendar" class="mini-calendar-container">
                         <!-- Dates and Slots will be populated here -->
@@ -296,9 +295,8 @@
                         style="background: rgba(231, 76, 60, 0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(231, 76, 60, 0.2); margin-top: 25px;">
                         <h4 style="color: #e74c3c; margin-top: 0; margin-bottom: 10px;"><i class="fas fa-ban"></i>
                             Cancelar Cita</h4>
-                        <p style="font-size: 0.9rem; color: #555; margin-bottom: 15px;">Al cancelar, se cambiará el
-                            estado a "Cancelada", no aparecerá en el tablero principal y se liberará su espacio
-                            reservado en Google Calendar. El registro se conservará como historial.</p>
+                        <p style="font-size: 0.9rem; color: #555; margin-bottom: 15px;">Para cancelar una reserva y liberar su espacio reservado en 
+                            el calendario, haz clic en el botón de abajo.</p>
                         <div class="modal-footer-actions" style="margin-top:0; padding-top:0; border:none;">
                             <button type="button" class="btn-danger" onclick="cancelCurrentRecord()"><i
                                     class="fas fa-calendar-times"></i> Cancelar y Liberar Fecha</button>

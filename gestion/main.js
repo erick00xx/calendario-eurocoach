@@ -784,7 +784,7 @@ async function processReschedule() {
 
     const result = await Swal.fire({
         title: '¿Confirmar reprogramación?',
-        text: `Se duplicarán todos los datos del alumno y la sesión para crear la nueva cita de manera automática. La cita original actual se marcará inmediatamente como "Reprogramada" en tu base de datos.\n\nNueva fecha: ${selectedReschedDate} a las ${selectedReschedTime}:00`,
+        text: `Se creará una nueva reserva automáticamente.\n\nNueva fecha: ${selectedReschedDate} a las ${selectedReschedTime}:00 \n\n Motivo: ${mo} \n\nSe mantendrá en el historial la cita original.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Sí, reprogramar',
@@ -859,7 +859,7 @@ async function sendReminderEmail() {
 async function deleteCurrentRecord() {
     const confirmation = await Swal.fire({
         title: '¿Estás completamente seguro?',
-        text: "Vas a eliminar toda la tarjeta, su historial y soltarás el bloque horario correspondiente en Google Calendar. Esta acción es IRREVERSIBLE.",
+        text: "Vas a eliminar el registro actual, y no se verá más en la data. Esta acción es IRREVERSIBLE.",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#e74c3c',
@@ -899,7 +899,7 @@ async function deleteCurrentRecord() {
 async function cancelCurrentRecord() {
     const confirmation = await Swal.fire({
         title: '¿Confirmar Cancelación?',
-        text: "La cita se marcará como Cancelada y se liberará su espacio del Google Calendar inmediatamente. El registro histórico permanecerá disponible.",
+        text: "La cita se marcará como Cancelada y se liberará su espacio en el Calendario inmediatamente. Aún se mantendrá en el historial.",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#e74c3c',
