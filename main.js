@@ -1,6 +1,6 @@
 // CONFIGURACIÓN DE LA URL DE APPS SCRIPT
 // REEMPLAZAR ESTA CADENA CON LA URL PUBLICADA COMO APLICACIÓN WEB DE APPS SCRIPT
-const API_URL = "https://script.google.com/macros/s/AKfycbzsQ1K0hEMONvmFodlDbZOSjva4IrKqQqdnfC5D-wNk-nIzTcP0dix5WkVtiheQ4Qprdw/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxc4XJ7IGMunfbxvC_qc-5NryuN2rqNFiuN3nNgqUc8R-Op4HAX2up7qhL1OZ-C9mznRA/exec";
 
 const tenants = {
     'instituto_empresa': {
@@ -207,8 +207,9 @@ async function loadExternalData() {
     }
 
     try {
+        const tenant = document.getElementById('tenant-input').value || '';
         // Fetch all data at once
-        const res = await fetch(`${API_URL}?action=getInitialData`);
+        const res = await fetch(`${API_URL}?action=getInitialData&tenant=${encodeURIComponent(tenant)}`);
         const json = await res.json();
 
         programsData = json.programs || [];
@@ -465,7 +466,7 @@ function renderTimeSlots(dateStr) {
     const slots = availableSlots[dateStr] || [];
 
     if (slots.length === 0) {
-        container.innerHTML = '<div class="no-slots-msg">Todas las citas ocupadas de este día.</div>';
+        container.innerHTML = '<div class="no-slots-msg">Día ya no disponible ó todas las reservas fueron ocupadas de este día.</div>';
         return;
     }
 

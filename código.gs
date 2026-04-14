@@ -2,6 +2,7 @@ const SPREADSHEET_ID = '1CURP5Equ3EaH6NcWDNOo_CX190qaoPSfW0ZTxrLy83o';
 
 function doGet(e) {
   const action = e.parameter.action;
+  const tenant = e.parameter.tenant || '';
   
   if (action === 'cancel') {
     const id = e.parameter.id;
@@ -14,7 +15,7 @@ function doGet(e) {
     if (action === 'getInitialData') {
       result = {
         programs: getPrograms(),
-        slots: getAvailability(),
+        slots: obtenerDisponibilidad(tenant),
         profiles: getLatestProfiles()
       };
     } else if (action === 'getPrograms') {
@@ -24,7 +25,7 @@ function doGet(e) {
        const cleanEmail = email ? email.trim() : '';
        result = searchUserProfile(cleanEmail);
     } else if (action === 'getSlots') {
-       result = getAvailability();
+       result = obtenerDisponibilidad(tenant);
     } else if (action === 'getAllReservations') {
        result = getAllReservations();
     }
@@ -56,7 +57,7 @@ function doPost(e) {
     } else if (action === 'deleteRecord') {
       result = deleteRecord(data);
     } else {
-      result = createReservation(data);
+      result = registrarReserva(data);
     }
   } catch (error) {
     result = { success: false, error: error.toString() };
@@ -153,58 +154,217 @@ function getLatestProfiles() {
 }
 
 // ----------------------------------------------------
-// Obtener horarios disponibles (Lunes a Sábado, 8am - 6pm, 15 días)
+// No Disponible + Disponibilidad
+// Se usa la TZ del script para comparar fechas locales y evitar el desfase de -1 día.
 // ----------------------------------------------------
-function getAvailability() {
+function normalizarTextoNoDisponible(valor) {
+  if (valor === null || valor === undefined) return '';
+  return valor.toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_\-\/]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function obtenerClaveFecha(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function normalizarAmbitoNoDisponible(valor) {
+  const texto = normalizarTextoNoDisponible(valor);
+  if (!texto || texto === 'global' || texto === 'todos' || texto === 'todo' || texto === 'all') return 'global';
+  if (texto === 'instituto empresa' || texto === 'institutoempresa' || texto === 'empresa' || texto === 'instituto de la empresa') return 'instituto_empresa';
+  if (texto === 'blackwell' || texto === 'blackwell global' || texto === 'blackwell global university') return 'blackwell';
+  if (texto === 'neumann' || texto === 'jhonn vonn neumann' || texto === 'jhonn von neumann' || texto === 'jhon vonn neumann') return 'neumann';
+  if (texto === 'ua chile' || texto === 'uachile' || texto === 'universidad autonoma' || texto === 'universidad autonoma de chile') return 'ua_chile';
+  return 'global';
+}
+
+function obtenerAmbitoDesdeTenant(tenant) {
+  return normalizarAmbitoNoDisponible(tenant);
+}
+
+function convertirHoraAMinutos(valor) {
+  if (valor === null || valor === undefined || valor === '') return null;
+
+  const texto = valor instanceof Date && !isNaN(valor.getTime())
+    ? Utilities.formatDate(valor, Session.getScriptTimeZone(), 'HH:mm')
+    : valor.toString().trim();
+
+  if (!texto) return null;
+
+  if (/^\d+(?:[.,]\d+)?$/.test(texto)) {
+    const numero = parseFloat(texto.replace(',', '.'));
+    if (numero >= 0 && numero <= 24) return Math.round(numero * 60);
+    if (numero <= 1440) return Math.round(numero);
+    return null;
+  }
+
+  const textoLower = texto.toLowerCase().replace(/\s+/g, '');
+
+  // Soporta: 8, 8:30, 8:00:00, 8am, 8:30pm, 8:00 PM
+  const regexMatch = textoLower.match(/^(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?([ap]m)?$/i);
+  if (!regexMatch) return null;
+
+  let horas = parseInt(regexMatch[1], 10);
+  const minutos = parseInt(regexMatch[2] || '0', 10);
+  const sufijo = (regexMatch[4] || '').toLowerCase();
+
+  if (horas < 0 || horas > 23 || minutos < 0 || minutos > 59) return null;
+
+  if (sufijo === 'pm' && horas < 12) horas += 12;
+  if (sufijo === 'am' && horas === 12) horas = 0;
+  
+  return horas * 60 + minutos;
+}
+
+function obtenerReglasNoDisponible() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('NoDisponible');
+  if (!sheet) return [];
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  // Leer como se ve en Sheets para evitar desfases de fecha/hora por TZ/serial interno
+  const data = sheet.getRange(2, 1, lastRow - 1, 4).getDisplayValues();
+  const reglas = [];
+
+  data.forEach(row => {
+    const fechaKey = normalizarFechaNoDisponibleTexto(row[0]);
+    if (!fechaKey) return;
+
+    const ambito = normalizarAmbitoNoDisponible(row[3]);
+    const inicioOriginal = convertirHoraAMinutos(row[1]);
+    const finOriginal = convertirHoraAMinutos(row[2]);
+
+    const esDiaCompleto = inicioOriginal === null && finOriginal === null;
+    let inicioMin = inicioOriginal;
+    let finMin = finOriginal;
+
+    if (!esDiaCompleto) {
+      if (inicioMin !== null && finMin === null) {
+        finMin = inicioMin + 60;
+      } else if (inicioMin === null && finMin !== null) {
+        inicioMin = 0;
+      } else if (inicioMin !== null && finMin !== null && finMin <= inicioMin) {
+        finMin = inicioMin + 60;
+      }
+    }
+
+    reglas.push({
+      fechaKey,
+      ambito,
+      esDiaCompleto,
+      inicioMin,
+      finMin
+    });
+  });
+
+  return reglas;
+}
+
+function normalizarFechaNoDisponibleTexto(valor) {
+  if (valor === null || valor === undefined) return '';
+
+  const texto = valor.toString().trim();
+  if (!texto) return '';
+
+  // Acepta lo que se ve en la hoja: 14/04/2026, 2026-04-14 o 14-04-2026
+  let anio;
+  let mes;
+  let dia;
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(texto)) {
+    [dia, mes, anio] = texto.split('/');
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    [anio, mes, dia] = texto.split('-');
+  } else if (/^\d{2}-\d{2}-\d{4}$/.test(texto)) {
+    [dia, mes, anio] = texto.split('-');
+  } else if (/^\d{4}\/\d{2}\/\d{2}$/.test(texto)) {
+    [anio, mes, dia] = texto.split('/');
+  } else {
+    return '';
+  }
+
+  const anioInt = parseInt(anio, 10);
+  const mesInt = parseInt(mes, 10);
+  const diaInt = parseInt(dia, 10);
+  if (isNaN(anioInt) || isNaN(mesInt) || isNaN(diaInt)) return '';
+
+  return `${anioInt.toString().padStart(4, '0')}-${mesInt.toString().padStart(2, '0')}-${diaInt.toString().padStart(2, '0')}`;
+}
+
+function slotBloqueadoPorNoDisponible(inicioSlot, finSlot, tenant, reglas) {
+  if (!(inicioSlot instanceof Date) || !(finSlot instanceof Date)) return false;
+
+  const reglasNoDisponible = Array.isArray(reglas) ? reglas : obtenerReglasNoDisponible();
+  const fechaKeySlot = obtenerClaveFecha(inicioSlot);
+  if (!fechaKeySlot) return false;
+
+  const ambitoTenant = obtenerAmbitoDesdeTenant(tenant);
+  const inicioSlotMin = inicioSlot.getHours() * 60 + inicioSlot.getMinutes();
+  const finSlotMin = finSlot.getHours() * 60 + finSlot.getMinutes();
+
+  return reglasNoDisponible.some(regla => {
+    if (regla.fechaKey !== fechaKeySlot) return false;
+    if (regla.ambito !== 'global' && regla.ambito !== ambitoTenant) return false;
+    if (regla.esDiaCompleto) return true;
+    if (regla.inicioMin === null || regla.finMin === null) return true;
+    return inicioSlotMin < regla.finMin && finSlotMin > regla.inicioMin;
+  });
+}
+
+function obtenerDisponibilidad(tenant = '') {
   const now = new Date();
-  const endDate = new Date();
+  const endDate = new Date(now);
   endDate.setDate(now.getDate() + 15);
-  
+
+  const reglasNoDisponible = obtenerReglasNoDisponible();
+  const tenantAmbito = obtenerAmbitoDesdeTenant(tenant);
   const events = CalendarApp.getDefaultCalendar().getEvents(now, endDate);
-  
-  // Mapa de fechas ocupadas
+
+  // Mapa de fechas ocupadas usando la TZ del script para no cruzar días por desfases UTC.
   const bookedSlots = {};
   events.forEach(event => {
     const start = event.getStartTime();
-    const dateKey = `${start.getFullYear()}-${(start.getMonth()+1).toString().padStart(2, '0')}-${start.getDate().toString().padStart(2, '0')}`;
+    const dateKey = obtenerClaveFecha(start);
     const hours = start.getHours();
-    
+
     if (!bookedSlots[dateKey]) bookedSlots[dateKey] = [];
     bookedSlots[dateKey].push(hours);
   });
-  
+
   const availableDates = {};
-  
-  // Iterar 15 días
+
   for (let i = 0; i < 15; i++) {
-    let checkDate = new Date();
+    const checkDate = new Date(now);
     checkDate.setDate(now.getDate() + i);
-    
+
     const dayOfWeek = checkDate.getDay();
-    // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
-    if (dayOfWeek !== 0) { // Excluir domingo
-      const dateKey = `${checkDate.getFullYear()}-${(checkDate.getMonth()+1).toString().padStart(2, '0')}-${checkDate.getDate().toString().padStart(2, '0')}`;
+    if (dayOfWeek !== 0) {
+      const dateKey = obtenerClaveFecha(checkDate);
       availableDates[dateKey] = [];
-      
+
       const currentBooked = bookedSlots[dateKey] || [];
-      
-      // Horas de 8am (8) a 6pm (18). 
-      // Por regla, son intervalos de 1 hora.
+
       for (let hour = 8; hour <= 18; hour++) {
-        // En "hoy", no mostrar horas pasadas
         if (i === 0 && checkDate.getHours() >= hour) continue;
-        
-        if (!currentBooked.includes(hour)) {
-          // Formato AM/PM
-          const ampm = hour >= 12 ? 'PM' : 'AM';
-          const h = hour % 12 || 12;
-          availableDates[dateKey].push({ hour: hour, label: `${h}:00 ${ampm}` });
-        }
+
+        const slotStart = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate(), hour, 0, 0);
+        const slotEnd = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate(), hour + 1, 0, 0);
+
+        if (currentBooked.includes(hour)) continue;
+        if (slotBloqueadoPorNoDisponible(slotStart, slotEnd, tenantAmbito, reglasNoDisponible)) continue;
+
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const h = hour % 12 || 12;
+        availableDates[dateKey].push({ hour: hour, label: `${h}:00 ${ampm}` });
       }
     }
   }
-  
+
   return availableDates;
+}
+
+function getAvailability(tenant = '') {
+  return obtenerDisponibilidad(tenant);
 }
 
 function generateId() {
@@ -215,6 +375,10 @@ function generateId() {
 // Crear Reserva
 // ----------------------------------------------------
 function createReservation(data) {
+  return registrarReserva(data);
+}
+
+function registrarReserva(data) {
   // Limpiar espacios
   const correo = data.correo ? data.correo.trim() : '';
   const nombres = data.nombre ? data.nombre.trim() : '';
@@ -226,18 +390,23 @@ function createReservation(data) {
   const motivo = data.motivo ? data.motivo.trim() : '';
   
   const dateStr = data.fecha; // YYYY-MM-DD
-  const hour = parseInt(data.hora); // int 8 to 18
+  const hour = parseInt(data.hora, 10); // int 8 to 18
   
   const [year, month, day] = dateStr.split('-');
-  
-  const startTime = new Date(year, parseInt(month)-1, day, hour, 0, 0);
-  const endTime = new Date(year, parseInt(month)-1, day, hour + 1, 0, 0);
+  const startTime = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hour, 0, 0);
+  const endTime = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hour + 1, 0, 0);
+  const reglasNoDisponible = obtenerReglasNoDisponible();
+  const tenantAmbito = obtenerAmbitoDesdeTenant(instUniv);
+
+  if (slotBloqueadoPorNoDisponible(startTime, endTime, tenantAmbito, reglasNoDisponible)) {
+    return { success: false, error: 'El horario seleccionado no está disponible por una restricción en NoDisponible.' };
+  }
   
   const resId = generateId();
   
   // 1. Crear evento en Google Calendar y linkear ID Interno
   const cal = CalendarApp.getDefaultCalendar();
-  const event = cal.createEvent(`Reserva EUROCOACH - ${nombres}`, startTime, endTime, {
+  cal.createEvent(`Reserva EUROCOACH - ${nombres}`, startTime, endTime, {
     description: `Reserva para: ${nombres}\nCorreo: ${correo}\nTeléfono: ${telefono}\nInstituto: ${instUniv}\nPrograma: ${programa}\nMotivo: ${motivo}\n\n[ID Reserva: ${resId}]`
   });
   
@@ -542,6 +711,15 @@ function rescheduleReservation(payload) {
     }
   }
   if (!oldRow) return { success: false, message: 'Reserva no encontrada' };
+
+  const reglasNoDisponible = obtenerReglasNoDisponible();
+  const [nuevoAnio, nuevoMes, nuevoDia] = payload.nuevaFecha.toString().split('-');
+  const nuevaHora = parseInt(payload.nuevaHora, 10);
+  const nuevoInicio = new Date(parseInt(nuevoAnio, 10), parseInt(nuevoMes, 10) - 1, parseInt(nuevoDia, 10), nuevaHora, 0, 0);
+  const nuevoFin = new Date(parseInt(nuevoAnio, 10), parseInt(nuevoMes, 10) - 1, parseInt(nuevoDia, 10), nuevaHora + 1, 0, 0);
+  if (slotBloqueadoPorNoDisponible(nuevoInicio, nuevoFin, oldRow[7], reglasNoDisponible)) {
+    return { success: false, message: 'El nuevo horario está bloqueado por una restricción en NoDisponible.' };
+  }
   
   // Set old to Reprogramada
   sheet.getRange(rowIndex, 14).setValue("Reprogramada");
@@ -584,16 +762,20 @@ function createReservationModified(data, isReschedule, oldFecha, oldHora) {
   const motivo = data.motivo ? data.motivo.trim() : '';
   
   const dateStr = data.fecha; 
-  const hour = parseInt(data.hora); 
+  const hour = parseInt(data.hora, 10); 
   const [year, month, day] = dateStr.split('-');
   
   const resId = generateId();
   
-  const startTime = new Date(year, parseInt(month)-1, day, hour, 0, 0);
-  const endTime = new Date(year, parseInt(month)-1, day, hour + 1, 0, 0);
+  const startTime = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hour, 0, 0);
+  const endTime = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hour + 1, 0, 0);
+  const reglasNoDisponible = obtenerReglasNoDisponible();
+  if (slotBloqueadoPorNoDisponible(startTime, endTime, obtenerAmbitoDesdeTenant(instUniv), reglasNoDisponible)) {
+    return { success: false, message: 'El nuevo horario está bloqueado por una restricción en NoDisponible.' };
+  }
   
   const cal = CalendarApp.getDefaultCalendar();
-  const event = cal.createEvent(`Reserva EUROCOACH - ${nombres}`, startTime, endTime, {
+  cal.createEvent(`Reserva EUROCOACH - ${nombres}`, startTime, endTime, {
     description: `Reserva para: ${nombres}\nCorreo: ${correo}\nTeléfono: ${telefono}\nInstituto: ${instUniv}\nPrograma: ${programa}\nMotivo: ${motivo}\n\n[ID Reserva: ${resId}]`
   });
   
