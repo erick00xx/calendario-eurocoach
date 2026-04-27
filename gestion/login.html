@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iniciar Sesión - Eurocoach</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f4f7fa;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 410px;
+            padding: 2rem;
+            border-radius: 14px;
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            border: 1px solid #eceff3;
+        }
+
+        .login-title {
+            margin: 0 0 1.4rem;
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #311b54;
+            text-align: center;
+        }
+
+        .login-title i {
+            color: #06c0cf;
+            margin-right: 6px;
+        }
+
+        .alert {
+            display: none;
+            margin-bottom: 12px;
+            padding: 9px 10px;
+            border-radius: 8px;
+            border: 1px solid #f5c2c7;
+            background: #f8d7da;
+            color: #842029;
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.88rem;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .form-control {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #d6dde5;
+            border-radius: 8px;
+            padding: 11px 12px;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .form-control:focus {
+            border-color: #06c0cf;
+            box-shadow: 0 0 0 3px rgba(6, 192, 207, 0.15);
+        }
+
+        .toggle-pass {
+            position: absolute;
+            right: 11px;
+            top: 37px;
+            color: #768190;
+            cursor: pointer;
+        }
+
+        .btn {
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            padding: 11px 12px;
+            font-weight: 700;
+            color: #fff;
+            background: #06c0cf;
+            cursor: pointer;
+            font-size: 0.95rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: #05a5b3;
+        }
+
+        .btn:disabled {
+            background: #9aa9b8;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            border-top-color: #fff;
+            animation: spin 0.7s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-card">
+        <h3 class="login-title"><i class="fas fa-user-circle"></i>Acceso Eurocoach</h3>
+
+        <div id="loginAlert" class="alert" role="alert"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Usuario</label>
+                <input type="text" id="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" class="form-control" required>
+                <span id="togglePassword" class="toggle-pass"><i class="fas fa-eye"></i></span>
+            </div>
+            <button type="submit" class="btn" id="loginBtn">
+                <span id="btnText">Ingresar</span>
+                <span id="btnSpinner" class="spinner"></span>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbyvh_QLXrUfOdX8ZEX7cctcDGqLyM3bHBzD6X2VJ1_Nz7YdZxDykw5fpUdFcmdDqiHbpw/exec';
+        const MAIN_PAGE = 'index.html';
+        const AUTH_TOKEN_KEY = 'eurocoach_auth_token';
+        const AUTH_USER_KEY = 'eurocoach_auth_user';
+
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+
+        togglePassword.addEventListener('click', () => {
+            const isPassword = passwordInput.getAttribute('type') === 'password';
+            passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+            const icon = togglePassword.querySelector('i');
+            icon.classList.toggle('fa-eye');
+            icon.classList.toggle('fa-eye-slash');
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const alertBox = document.getElementById('loginAlert');
+            const btn = document.getElementById('loginBtn');
+            const btnText = document.getElementById('btnText');
+            const spinner = document.getElementById('btnSpinner');
+
+            alertBox.style.display = 'none';
+            btn.disabled = true;
+            btnText.textContent = 'Verificando...';
+            spinner.style.display = 'inline-block';
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', username);
+                formData.append('password', password);
+
+                const response = await fetch(`${API_URL}?action=login`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.message || 'Credenciales incorrectas');
+                }
+
+                sessionStorage.setItem(AUTH_TOKEN_KEY, result.token);
+                sessionStorage.setItem(AUTH_USER_KEY, result.user || username);
+                window.location.href = MAIN_PAGE;
+            } catch (error) {
+                alertBox.textContent = error.message || 'Error al iniciar sesión';
+                alertBox.style.display = 'block';
+                btn.disabled = false;
+                btnText.textContent = 'Ingresar';
+                spinner.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+
+</html>

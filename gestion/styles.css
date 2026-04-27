@@ -65,7 +65,7 @@ body.admin-body {
 }
 
 .btn-logout {
-    background: transparent;
+    background: #e74c3c;
     color: #e74c3c;
     border: 1px solid #e74c3c;
     padding: 8px 16px;

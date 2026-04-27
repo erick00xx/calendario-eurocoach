@@ -1,8 +1,52 @@
 const SPREADSHEET_ID = '1CURP5Equ3EaH6NcWDNOo_CX190qaoPSfW0ZTxrLy83o';
 
+const USER_SHEET_NAME = 'Usuarios';
+const SESSION_TTL_SECONDS = 21600; // 6 horas
+
+function generateSessionToken(username) {
+  const token = Utilities.getUuid();
+  CacheService.getScriptCache().put(token, username, SESSION_TTL_SECONDS);
+  return token;
+}
+
+function validateSessionToken(token) {
+  if (!token) return false;
+  return CacheService.getScriptCache().get(token) !== null;
+}
+
+function requireValidToken(token) {
+  if (!validateSessionToken(token)) {
+    throw new Error('No autorizado: sesión inválida o expirada.');
+  }
+}
+
+function loginAPI(username, password) {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(USER_SHEET_NAME);
+  if (!sheet) {
+    return { success: false, message: 'No existe la hoja Usuarios.' };
+  }
+
+  const data = sheet.getDataRange().getDisplayValues();
+  for (let i = 1; i < data.length; i++) {
+    const user = (data[i][0] || '').toString().trim();
+    const pass = (data[i][1] || '').toString();
+
+    if (
+      user.toLowerCase() === (username || '').toString().trim().toLowerCase() &&
+      pass === (password || '').toString()
+    ) {
+      const token = generateSessionToken(user);
+      return { success: true, message: 'Login exitoso', user: user, token: token };
+    }
+  }
+
+  return { success: false, message: 'Usuario o contraseña incorrectos.' };
+}
+
 function doGet(e) {
   const action = e.parameter.action;
   const tenant = e.parameter.tenant || '';
+  const token = e.parameter.token || '';
   
   if (action === 'cancel') {
     const id = e.parameter.id;
@@ -19,6 +63,8 @@ function doGet(e) {
         profiles: getLatestProfiles(),
         monthlyQuota: obtenerCupoMensualActual(tenant)
       };
+    } else if (action === 'validateToken') {
+      result = { success: validateSessionToken(token) };
     } else if (action === 'getPrograms') {
       result = getPrograms();
     } else if (action === 'searchUser') {
@@ -28,6 +74,7 @@ function doGet(e) {
     } else if (action === 'getSlots') {
        result = obtenerDisponibilidad(tenant);
     } else if (action === 'getAllReservations') {
+       requireValidToken(token);
        result = getAllReservations();
     }
   } catch(error) {
@@ -41,23 +88,48 @@ function doGet(e) {
 function doPost(e) {
   let result = {};
   try {
-    // Handling POST actions
-    const data = JSON.parse(e.postData.contents);
+    const rawBody = (e.postData && e.postData.contents) ? e.postData.contents : '';
+    let data = {};
+
+    try {
+      data = rawBody ? JSON.parse(rawBody) : {};
+    } catch (_) {
+      data = {};
+    }
+
     const action = e.parameter.action || data.action;
+
+    // Login público
+    if (action === 'login') {
+      const username = e.parameter.username || data.username || '';
+      const password = e.parameter.password || data.password || '';
+      result = loginAPI(username, password);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const token = e.parameter.token || data.token || '';
     
     if (action === 'updateReservation') {
+      requireValidToken(token);
       result = updateReservationData(data);
     } else if (action === 'updateStudent') {
+      requireValidToken(token);
       result = updateStudentData(data);
     } else if (action === 'reschedule') {
+      requireValidToken(token);
       result = rescheduleReservation(data);
     } else if (action === 'sendReminder') {
+      requireValidToken(token);
       result = sendReminderAction(data);
     } else if (action === 'uploadImage') {
+      requireValidToken(token);
       result = uploadImageDrive(data);
     } else if (action === 'deleteRecord') {
+      requireValidToken(token);
       result = deleteRecord(data);
     } else {
+      // Reserva pública
       result = registrarReserva(data);
     }
   } catch (error) {

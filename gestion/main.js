@@ -1,4 +1,7 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbx29MKCBivEqklwhrJA6TMkToCGeGA0RuINMPdKeiYFanapmWuNBnuatLn2MaHAAMQyig/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyvh_QLXrUfOdX8ZEX7cctcDGqLyM3bHBzD6X2VJ1_Nz7YdZxDykw5fpUdFcmdDqiHbpw/exec";
+const AUTH_TOKEN_KEY = 'eurocoach_auth_token';
+const AUTH_USER_KEY = 'eurocoach_auth_user';
+const LOGIN_PAGE = 'login.html';
 
 // Global State
 let allReservations = [];
@@ -16,8 +19,61 @@ let dtInstance = null;
 
 let currentSessionImages = [];
 
+function getAuthToken() {
+    return sessionStorage.getItem(AUTH_TOKEN_KEY) || '';
+}
+
+function clearSessionAndGoLogin() {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_USER_KEY);
+    window.location.href = LOGIN_PAGE;
+}
+
+function isUnauthorizedResult(result) {
+    if (!result) return false;
+    const txt = `${result.error || ''} ${result.message || ''}`.toLowerCase();
+    return txt.includes('no autorizado') || txt.includes('sesión inválida') || txt.includes('sesion invalida') || txt.includes('expirada');
+}
+
+async function apiGet(action, params = {}) {
+    const token = getAuthToken();
+    const query = new URLSearchParams({ action, ...params, token }).toString();
+    const response = await fetch(`${API_URL}?${query}`);
+    const json = await response.json();
+
+    if (isUnauthorizedResult(json)) {
+        clearSessionAndGoLogin();
+        throw new Error('Sesión inválida o expirada.');
+    }
+
+    return json;
+}
+
+async function apiPost(payload = {}) {
+    const token = getAuthToken();
+    const body = { ...payload, token };
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'text/plain' }
+    });
+    const json = await response.json();
+
+    if (isUnauthorizedResult(json)) {
+        clearSessionAndGoLogin();
+        throw new Error('Sesión inválida o expirada.');
+    }
+
+    return json;
+}
+
 // Initialize on load
 document.addEventListener('DOMContentLoaded', async () => {
+    if (!getAuthToken()) {
+        clearSessionAndGoLogin();
+        return;
+    }
+
     datePickerInstance = flatpickr("#filter-date-range", {
         mode: "range",
         dateFormat: "d/m/Y",
@@ -40,13 +96,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadInitialData() {
     // We need both all reservations AND the availability slots for rescheduling
-    const [reservationsRes, initialRes] = await Promise.all([
-        fetch(`${API_URL}?action=getAllReservations`),
-        fetch(`${API_URL}?action=getInitialData`)
+    const [resJson, initData] = await Promise.all([
+        apiGet('getAllReservations'),
+        apiGet('getInitialData')
     ]);
-
-    const resJson = await reservationsRes.json();
-    const initData = await initialRes.json();
 
     if (initData.error) {
         throw new Error('API Data Slots Error: ' + initData.error);
@@ -139,7 +192,7 @@ function setupEventListeners() {
 
     // Logout
     document.querySelector('.btn-logout').addEventListener('click', () => {
-        window.location.reload();
+        clearSessionAndGoLogin();
     });
 
     // Modal Tabs
@@ -411,12 +464,7 @@ function compressImage(file, callback) {
 async function uploadToDrive(base64, mimeType, filename, tempObj) {
     try {
         const payload = { action: 'uploadImage', base64, mimeType, filename };
-        const res = await fetch(API_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload),
-            headers: { 'Content-Type': 'text/plain' }
-        });
-        const ans = await res.json();
+        const ans = await apiPost(payload);
         console.log("Upload Response: ", ans);
 
         const idx = currentSessionImages.indexOf(tempObj);
@@ -599,10 +647,7 @@ async function saveSessionInfo() {
     };
 
     try {
-        await fetch(API_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
+        await apiPost(payload);
 
         // Update local object
         const idx = allReservations.findIndex(r => r.id === currentEditingId);
@@ -694,10 +739,7 @@ async function saveStudentEdit() {
     };
 
     try {
-        await fetch(API_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
+        await apiPost(payload);
 
         // Update local
         const idx = allReservations.findIndex(r => r.id === currentEditingId);
@@ -874,11 +916,7 @@ async function processReschedule() {
     };
 
     try {
-        const res = await fetch(API_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-        const ans = await res.json();
+        const ans = await apiPost(payload);
 
         if (ans.success) {
             Swal.fire('Éxito', 'Cita reprogramada correctamente. (Por favor recargue si desea ver el nuevo ID)', 'success');
@@ -912,10 +950,7 @@ async function sendReminderEmail() {
     };
 
     try {
-        await fetch(API_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
+        await apiPost(payload);
         closeLoader();
         Swal.fire('Enviado', 'Recordatorio enviado con éxito al correo del estudiante.', 'success');
     } catch (e) {
@@ -943,11 +978,7 @@ async function deleteCurrentRecord() {
         showLoader('Eliminando reserva y limpiando calendario...');
         try {
             const payload = { action: 'deleteRecord', id: currentEditingId };
-            const res = await fetch(API_URL, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            const ans = await res.json();
+            const ans = await apiPost(payload);
 
             if (ans.success) {
                 closeModal('management-modal');
@@ -1000,11 +1031,7 @@ async function cancelCurrentRecord() {
                 capturas: obj.capturas || ''
             };
 
-            const res = await fetch(API_URL, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            const ans = await res.json();
+            const ans = await apiPost(payload);
 
             if (ans.success) {
                 closeModal('management-modal');
